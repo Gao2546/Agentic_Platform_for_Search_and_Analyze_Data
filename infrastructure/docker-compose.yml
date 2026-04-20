@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # 1. MinIO - Data Lake (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: agentic_minio
+    ports:
+      - "9000:9000" # API Port
+      - "9001:9001" # Console Port
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  # 2. PostgreSQL with pgvector - Metadata & Vector Store
+  postgres:
+    image: ankane/pgvector:latest # Image ที่มี pgvector ติดตั้งมาให้แล้ว
+    container_name: agentic_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: agentic_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/init-scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # โหลด script สร้างตาราง
+    restart: unless-stopped
+
+  # 3. MongoDB - NoSQL Data Warehouse (Processed Data & AI Insights)
+  mongodb:
+    image: mongo:latest
+    container_name: agentic_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  # 4. RabbitMQ - Message Broker (Streaming Pipeline)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: agentic_rabbitmq
+    ports:
+      - "5672:5672"   # Message broker port
+      - "15672:15672" # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password123
+    restart: unless-stopped
+
+volumes:
+  minio_data:
+  postgres_data:
+  mongodb_data:
