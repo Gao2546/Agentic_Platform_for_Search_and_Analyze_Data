@@ -361,7 +361,7 @@ Write  `a .yaml file` to deploy the entire system (Airflow, Spark Workers, DBs, 
 
 ### Project Diagrams
 
-![](Agentic%20Platform%20for%20Search%20Analyze%20Data/AI_Agentic_Scheduling-2026-04-19-133737.png)
+![](images/AI_Agentic_Scheduling-2026-04-19-133737.png)
 
 ### Project Folder Structure
 ```code
