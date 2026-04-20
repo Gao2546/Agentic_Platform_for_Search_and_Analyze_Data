@@ -44,65 +44,69 @@ An application designed to define the scope for companies to track news, stock p
         - PostgreSQL - Metadata, State Management & Vector Store
            PostgreSQL will act as the "brain" managing Users, Scopes, Tools, and AI states.
             1. **Group: Vector Database
-            Enable Extension:** Enable the `pgvector` extension in PostgreSQL to store High-dimensional Vector data without the need to introduce a new Database Component.
-            •**`knowledge_embeddings`**: When Task 3.2 (ETL) executes, text-based data (e.g., economic news, meeting minutes) will be chunked and converted into Embeddings stored here. This allows AI Inference (Module B) to perform 
+                Enable Extension:** Enable the `pgvector` extension in PostgreSQL to store High-dimensional Vector data without the need to introduce a new Database Component.
+                - `knowledge_embeddings` When Task 3.2 (ETL) executes, text-based data (e.g., economic news, meeting minutes) will be chunked and converted into Embeddings stored here. This allows AI Inference (Module B) to perform 
                Retrieval-Augmented Generation (RAG), fetching relevant context to accurately analyze Sentiment or predict events.
-                ◦ `id` (UUID, PK)
-                ◦ `scope_id` (FK)
-                ◦ `source_reference` (URL or file path of the news/financial document in MinIO)
-                ◦ `chunk_text` (The extracted text snippet)
-                ◦ `embedding` (Vector data type `VECTOR(1536)` or corresponding to the Embedding Model size)
-                ◦ `created_at` (Timestamp)
+                - `id` (UUID, PK)
+                - `scope_id` (FK)
+                - `source_reference` (URL or file path of the news/financial document in MinIO)
+                - `chunk_text` (The extracted text snippet)
+                - `embedding` (Vector data type `VECTOR(1536)` or corresponding to the Embedding Model size)
+                - `created_at` (Timestamp)
             
-            2. **Group: User & Authentication** • **`users`**: Stores user information.
-                ◦ `id` (UUID, PK)
-                ◦ `email`, `password_hash`, `full_name`
-                ◦ `created_at`, `updated_at`
-            3. **Group: Scope & Project Management** • **`scopes`**: Stores details of the workspaces/scopes created by the user.
-                ◦ `id` (UUID, PK)
-                ◦ `user_id` (FK -> users.id)
-                ◦ `name`, `description`, `goal`
-                ◦ `schedule_mode` (Enum: `'MANUAL'`, `'AI_AGENT'`) (Allows the user to manually create schedules or let the AI handle it)
+            2. **Group: User & Authentication** 
+                • **`users`**: Stores user information.
+                - `id` (UUID, PK)
+                - `email`, `password_hash`, `full_name`
+                - `created_at`, `updated_at`
+            3. **Group: Scope & Project Management** 
+                • **`scopes`**: Stores details of the workspaces/scopes created by the user.
+                - `id` (UUID, PK)
+                - `user_id` (FK -> users.id)
+                - `name`, `description`, `goal`
+                - `schedule_mode` (Enum: `'MANUAL'`, `'AI_AGENT'`) (Allows the user to manually create schedules or let the AI handle it)
                 ◦ `status` (Enum: `'ACTIVE'`, `'PAUSED'`)
-            4. **Group: AI Models & Tool Metadata** • **`ai_models`**: Model Metadata & Assets
-            Stores only the model metadata and the storage location of the Weights files.
-                ◦ `id` (UUID, PK)
-                ◦ `model_name` (e.g., `'Llama-3-8B-Instruct'`, `'LSTM-Stock-Predictor'`)
-                ◦ `version` (e.g., `'v1.0'`)
-                ◦ `framework` (e.g., `'PyTorch'`, `'ONNX'`, `'GGUF'`)
-                ◦ `model_path` (URL pointing to the `.safetensors` or `.bin` file in MinIO)
-                ◦ `model_type` (Enum: `'LLM'`, `'TIME_SERIES'`, `'CLASSIFICATION'`, `'EXTERNAL_API'`)
+            4. **Group: AI Models & Tool Metadata** 
+                • **`ai_models`**: Model Metadata & Assets
+                Stores only the model metadata and the storage location of the Weights files.
+                - `id` (UUID, PK)
+                - `model_name` (e.g., `'Llama-3-8B-Instruct'`, `'LSTM-Stock-Predictor'`)
+                - `version` (e.g., `'v1.0'`)
+                - `framework` (e.g., `'PyTorch'`, `'ONNX'`, `'GGUF'`)
+                - `model_path` (URL pointing to the `.safetensors` or `.bin` file in MinIO)
+                - `model_type` (Enum: `'LLM'`, `'TIME_SERIES'`, `'CLASSIFICATION'`, `'EXTERNAL_API'`)
             
-            • **`tools`**: Execution Logic & Scripts
-            Stores execution scripts, including the pre-processing -> Load Model -> post-processing logic.
-                ◦ `id` (UUID, PK)
-                ◦ `ai_model_id` (FK -> ai_models.id, Nullable) *— This FK identifies which model the script is designed to load or manage (if it's a general script not utilizing AI, the value will be NULL).*
-                ◦ `name` (e.g., `'Llama-3 Inference Script'`, `'RSI Calculator'`)
-                ◦ `language` (Enum: `'Python'`, `'Go'`, `'C++'`)
-                ◦ `script_url` (URL pointing to the `.py` or `.go` script file in MinIO)
-                ◦ `input_schema`, `output_schema` (JSON)
-                ◦ `author_type` (Enum: `'HUMAN'`, `'AI_GENERATED'`)
+                • **`tools`**: Execution Logic & Scripts
+                Stores execution scripts, including the pre-processing -> Load Model -> post-processing logic.
+                - `id` (UUID, PK)
+                - `ai_model_id` (FK -> ai_models.id, Nullable) *— This FK identifies which model the script is designed to load or manage (if it's a general script not utilizing AI, the value will be NULL).*
+                - `name` (e.g., `'Llama-3 Inference Script'`, `'RSI Calculator'`)
+                - `language` (Enum: `'Python'`, `'Go'`, `'C++'`)
+                - `script_url` (URL pointing to the `.py` or `.go` script file in MinIO)
+                - `input_schema`, `output_schema` (JSON)
+                - `author_type` (Enum: `'HUMAN'`, `'AI_GENERATED'`)
             
-            5. **Group: Scheduling & Tasks** • **`schedules`**: Defines execution schedules for each Scope.
-                ◦ `id` (UUID, PK)
-                ◦ `scope_id` (FK)
-                ◦ `task_mode` (Enum: `'MANUAL'`, `'AI_AGENT'`) (Choose whether to create tasks manually or let the AI do it)
-                ◦ `execution_type`: (Enum: `'CRON'`, `'ONCE'`, `'CONTINUOUS'`) `CONTINUOUS` is reserved for Streaming tasks that must remain active indefinitely.
-                ◦ `restart_policy`: (Enum: `'ALWAYS'`, `'ON_FAILURE'`, `'NEVER'`) Auto-restart configuration for Streaming tasks in the event of a script crash [`CONTINUOUS`].
-                ◦ `is_sequential` (Boolean: Run sequentially or independently based on time).
-                ◦ `cron_expression` (For custom, flexible CRON time scheduling).
+            5. **Group: Scheduling & Tasks** 
+                • **`schedules`**: Defines execution schedules for each Scope.
+                - `id` (UUID, PK)
+                - `scope_id` (FK)
+                - `task_mode` (Enum: `'MANUAL'`, `'AI_AGENT'`) (Choose whether to create tasks manually or let the AI do it)
+                - `execution_type`: (Enum: `'CRON'`, `'ONCE'`, `'CONTINUOUS'`) `CONTINUOUS` is reserved for Streaming tasks that must remain active indefinitely.
+                - `restart_policy`: (Enum: `'ALWAYS'`, `'ON_FAILURE'`, `'NEVER'`) Auto-restart configuration for Streaming tasks in the event of a script crash [`CONTINUOUS`].
+                - `is_sequential` (Boolean: Run sequentially or independently based on time).
+                - `cron_expression` (For custom, flexible CRON time scheduling).
             
-            • **`tasks`**: Execution Instances & Configs
-            Stores instances of the jobs to be executed by Airflow or RabbitMQ/Apache Kafka, along with cycle-specific configurations.
-                ◦ `id` (UUID, PK)
-                ◦ `schedule_id` (FK)
-                ◦ `task_type` (Enum: `'SEARCH'`, `'ETL'`, **`'`**`TRADITIONAL_LOGIC`**`'`**, `'AI_INFERENCE'`, `'VISUALIZE'`)
-                ◦ `tool_id` (FK -> tools.id)
-                ◦ `engine_type`: (Enum: `'AIRFLOW_DAG'`, `'STREAMING_WORKER'`) Specifies where the task will be routed for execution.
-                ◦ `depends_on_task_id` (Self-referencing FK for sequential tasks. Informs Airflow of dependencies (A $\rightarrow$ B $\rightarrow$ C) to build an accurate Workflow) [`AIRFLOW_DAG`].
-                ◦ `priority` (Used for queue jumping and resource allocation when servers are overloaded per Scope via Apache Spark) [`AIRFLOW_DAG`].
-                ◦ `execution_order` (A simple numerical sequence (1, 2, 3...) for UI display) [`AIRFLOW_DAG`].
-                ◦ `broker_topic`: (String, Nullable) For Streaming tasks, specifies the Message Broker Topic name (e.g., in RabbitMQ) that the script must read from or write to [`STREAMING_WORKER`].
+                • **`tasks`**: Execution Instances & Configs
+                    Stores instances of the jobs to be executed by Airflow or RabbitMQ/Apache Kafka, along with cycle-specific configurations.
+                - `id` (UUID, PK)
+                - `schedule_id` (FK)
+                - `task_type` (Enum: `'SEARCH'`, `'ETL'`, **`'`**`TRADITIONAL_LOGIC`**`'`**, `'AI_INFERENCE'`, `'VISUALIZE'`)
+                - `tool_id` (FK -> tools.id)
+                - `engine_type`: (Enum: `'AIRFLOW_DAG'`, `'STREAMING_WORKER'`) Specifies where the task will be routed for execution.
+                - `depends_on_task_id` (Self-referencing FK for sequential tasks. Informs Airflow of dependencies (A $\rightarrow$ B $\rightarrow$ C) to build an accurate Workflow) [`AIRFLOW_DAG`].
+                - `priority` (Used for queue jumping and resource allocation when servers are overloaded per Scope via Apache Spark) [`AIRFLOW_DAG`].
+                - `execution_order` (A simple numerical sequence (1, 2, 3...) for UI display) [`AIRFLOW_DAG`].
+                - `broker_topic`: (String, Nullable) For Streaming tasks, specifies the Message Broker Topic name (e.g., in RabbitMQ) that the script must read from or write to [`STREAMING_WORKER`].
                 ◦ `arguments` (JSONB) *Stores Configuration (see examples below).*
             
                 
@@ -376,3 +380,55 @@ An application designed to define the scope for companies to track news, stock p
 ### Project Diagrams
 
 ![AI Agentic Scheduling-2026-04-19-133737.png](images/AI_Agentic_Scheduling-2026-04-19-133737.png)
+
+### Project Folder Structure
+```code
+agentic-platform/
+├── .github/                  
+│   └── workflows/            # CI/CD Pipelines (เช่น Validate โค้ด, Build Docker, Deploy K8s)
+│
+├── infrastructure/           # ฐานข้อมูล, Message Broker และ Deployment Configs
+│   ├── docker-compose.yml    # สำหรับรัน Local Infrastructure
+│   ├── k8s/                  # Kubernetes Manifests สำหรับการ Deploy ขึ้น Cloud (Phase 1: Task 5)
+│   └── init-scripts/         # Scripts เริ่มต้น Database เช่น init.sql สำหรับ Postgres
+│
+├── backend/                  # Core API Service (Phase 2: Task 2)
+│   ├── src/
+│   │   ├── api/              # API Endpoints (Scope, Task, Model Management)
+│   │   ├── core/             # Logic หลักของระบบ (Trigger Airflow, จัดการ State)
+│   │   ├── db/               # โค้ดเชื่อมต่อ Postgres (Metadata) และ Mongo (Results)
+│   │   └── services/         # Service เรียกใช้ AI หรือ External APIs
+│   ├── Dockerfile
+│   └── requirements.txt / go.mod
+│
+├── frontend/                 # Web Application & Dashboard (Phase 2: Task 1)
+│   ├── src/
+│   │   ├── components/       # UI Components (กราฟ, ตาราง)
+│   │   ├── pages/            # หน้า Dashboard, หน้าจัดการ Scope/Schedule
+│   │   └── hooks/            # เชื่อมต่อ WebSocket สำหรับรับ Live Data (Streaming)
+│   └── package.json
+│
+├── data-pipeline/            # ส่วนของ Batch Processing (Phase 1: Task 3.A)
+│   ├── airflow/
+│   │   ├── dags/             # โค้ด Airflow DAGs ควบคุม Workflow
+│   │   └── config/
+│   └── spark-jobs/           # โค้ด PySpark สำหรับทำ ETL/ELT 클ีนข้อมูลลง MinIO
+│
+├── streaming-pipeline/       # ส่วนของ Event-Driven & Real-time (Phase 1: Task 3.B)
+│   ├── ingestion/            # Workers เปิด WebSocket รับข้อมูล Tick-by-Tick
+│   ├── processors/           # In-memory ETL & Fast-lane Logic (Go/Rust/Python)
+│   └── consumers/            # สคริปต์ดักจับ Event จาก Kafka/RabbitMQ
+│
+├── ai-engine/                # ระบบสมองกลและการรันโค้ดจำลอง (Phase 1: Task 4)
+│   ├── sandbox/              # Docker configs, cgroups setup สำหรับรัน AI Code ให้ปลอดภัย
+│   ├── pre-validator/        # AST Check & Linter สแกนโค้ดก่อนลง Sandbox
+│   └── prompts/              # เก็บ System Prompts สำหรับ Agent
+│
+├── tools-library/            # แหล่งรวม Tool Scripts ทั่วไปที่จะถูกดึงไปเก็บบน MinIO
+│   ├── traditional-logic/    # เช่น สูตร RSI, MACD, แจ้งเตือนราคา
+│   ├── ai-inference/         # สคริปต์โหลดโมเดลและรัน LLM
+│   └── external-apis/        # สคริปต์ดึง News API, Stock API
+│
+└── setup-scripts/            # สคริปต์สำหรับ Config ระบบหลังเปิด Container
+    └── init-minio-buckets.py # โค้ดสร้าง Bucket 'ai-tool-scripts', 'raw-data' อัตโนมัติ
+```
