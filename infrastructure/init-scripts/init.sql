@@ -3,7 +3,9 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- =========================================================
 -- Group: User & Authentication
+-- =========================================================
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -13,7 +15,9 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================================================
 -- Group: Scope & Project Management
+-- =========================================================
 CREATE TYPE schedule_mode_enum AS ENUM ('MANUAL', 'AI_AGENT');
 CREATE TYPE scope_status_enum AS ENUM ('ACTIVE', 'PAUSED');
 
@@ -28,7 +32,9 @@ CREATE TABLE scopes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================================================
 -- Group: AI Models & Tool Metadata
+-- =========================================================
 CREATE TYPE model_type_enum AS ENUM ('LLM', 'TIME_SERIES', 'CLASSIFICATION', 'EXTERNAL_API');
 CREATE TABLE ai_models (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -54,7 +60,9 @@ CREATE TABLE tools (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================================================
 -- Group: Scheduling & Tasks
+-- =========================================================
 CREATE TYPE execution_type_enum AS ENUM ('CRON', 'ONCE', 'CONTINUOUS');
 CREATE TYPE restart_policy_enum AS ENUM ('ALWAYS', 'ON_FAILURE', 'NEVER');
 
@@ -86,12 +94,73 @@ CREATE TABLE tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Group: Vector Database (knowledge_embeddings)
+-- =========================================================
+-- Group: UDTP (Uniform Data Tracking Protocol) Enums
+-- =========================================================
+CREATE TYPE data_stage_enum AS ENUM ('1_RAW', '2_ETL', '3_ANALYZE', '4_VISUALIZE');
+
+-- =========================================================
+-- Group: Vector Database (knowledge_embeddings) + UDTP Metadata
+-- =========================================================
 CREATE TABLE knowledge_embeddings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    scope_id UUID REFERENCES scopes(id) ON DELETE CASCADE,
     source_reference TEXT NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding VECTOR(1536), -- ขนาด Vector ตามโมเดล (เช่น OpenAI text-embedding-ada-002 ใช้ 1536)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    embedding VECTOR(1536), 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- UDTP Metadata Columns
+    udtp_scope_ids UUID[] NOT NULL DEFAULT '{}',
+    udtp_schedule_ids UUID[] NOT NULL DEFAULT '{}',
+    udtp_tags TEXT[] DEFAULT '{}',
+    udtp_stage data_stage_enum NOT NULL
 );
+
+-- =========================================================
+-- 🔥 GIN Indexes สำหรับ UDTP เพื่อเร่งความเร็วการค้นหา
+-- =========================================================
+-- Index สำหรับค้นหาแบบ Intersection (&&) และ Union
+CREATE INDEX idx_udtp_scope_ids ON knowledge_embeddings USING GIN (udtp_scope_ids);
+CREATE INDEX idx_udtp_schedule_ids ON knowledge_embeddings USING GIN (udtp_schedule_ids);
+CREATE INDEX idx_udtp_tags ON knowledge_embeddings USING GIN (udtp_tags);
+
+-- B-Tree Index ธรรมดาสำหรับ Stage (เพราะข้อมูลมีแค่ 4 แบบ)
+CREATE INDEX idx_udtp_stage ON knowledge_embeddings (udtp_stage);
+
+-- =========================================================
+-- Group: Data Lake File Catalog (MinIO Metadata)
+-- =========================================================
+CREATE TABLE file_assets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    asset_id VARCHAR(255) UNIQUE NOT NULL,    -- รหัสอ้างอิงไฟล์ (อาจใช้ UUID หรือ Hash ของไฟล์)
+    file_name VARCHAR(255) NOT NULL,          -- ชื่อไฟล์ เช่น 'data_2026_q1.parquet'
+    file_path TEXT NOT NULL,                  -- Path เต็มใน MinIO เช่น 's3a://processed-data/clean-news/...'
+    mime_type VARCHAR(100),                   -- ชนิดไฟล์ เช่น 'application/json', 'application/parquet', 'text/csv'
+    size_byte BIGINT NOT NULL DEFAULT 0,      -- ขนาดไฟล์ (ใช้ BIGINT เพราะไฟล์อาจใหญ่กว่า 2GB)
+    compression VARCHAR(50) DEFAULT 'NONE',   -- รูปแบบการบีบอัด เช่น 'NONE', 'SNAPPY', 'GZIP', 'ZSTD'
+    attributes JSONB DEFAULT '{}'::jsonb,     -- ข้อมูลยืดหยุ่นเพิ่มเติม (เช่น จำนวน Row, Schema Version, Encoding)
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- =========================================================
+    -- UDTP Metadata Columns (เพื่อให้ค้นหาไฟล์ข้าม Scope ได้)
+    -- =========================================================
+    udtp_scope_ids UUID[] NOT NULL DEFAULT '{}',
+    udtp_schedule_ids UUID[] NOT NULL DEFAULT '{}',
+    udtp_tags TEXT[] DEFAULT '{}',
+    udtp_stage data_stage_enum NOT NULL
+);
+
+-- =========================================================
+-- Indexes สำหรับ File Assets
+-- =========================================================
+-- 1. Index สำหรับค้นหาไฟล์ด้วย Path หรือ Asset ID เร็วๆ
+CREATE INDEX idx_file_assets_asset_id ON file_assets (asset_id);
+CREATE INDEX idx_file_assets_path ON file_assets (file_path);
+
+-- 2. GIN Indexes สำหรับค้นหาไฟล์ด้วย UDTP Logic (Intersection / Union)
+CREATE INDEX idx_file_assets_udtp_scopes ON file_assets USING GIN (udtp_scope_ids);
+CREATE INDEX idx_file_assets_udtp_schedules ON file_assets USING GIN (udtp_schedule_ids);
+CREATE INDEX idx_file_assets_udtp_tags ON file_assets USING GIN (udtp_tags);
+CREATE INDEX idx_file_assets_udtp_stage ON file_assets (udtp_stage);

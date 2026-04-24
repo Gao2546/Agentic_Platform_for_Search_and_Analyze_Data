@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* ตั้งค่าพื้นหลังของเว็บให้เป็นสีเทาอ่อน สบายตา */
+body {
+  background-color: var(--color-gray-50);
+  color: var(--color-gray-900);
+}
