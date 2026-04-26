@@ -1,51 +1,11 @@
 [
     {
-        "schedule_id": "401c94c3-2f47-42f4-844c-db970a92d11f",
-        "scope_id": "cb28a33e-36bd-4811-9612-9b2cecf72d0f",
-        "cron": "0 * * * *",
+        "schedule_id": "f3b15ce3-5d0c-4b01-8b58-647a6d180919",
+        "scope_id": "ec1f22d5-383e-4b44-8254-3c3dfc6ba874",
+        "cron": "30 0 * * *",
         "tasks": [
             {
-                "task_id": "cd85ac01-86c9-4276-8b5e-ed39e4c9e0a0",
-                "task_type": "SEARCH",
-                "depends_on_task_id": null,
-                "arguments": {
-                    "ticker": "XAU/USD"
-                },
-                "script_url": "s3a://ai-tool-scripts/external-apis/fetch_data.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "3bb9cb1b-d3d3-4c38-abf9-ec72f9afa5ca",
-                "task_type": "ETL",
-                "depends_on_task_id": "cd85ac01-86c9-4276-8b5e-ed39e4c9e0a0",
-                "arguments": {
-                    "spark.executor.memory": "2g"
-                },
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "9f85896a-2a39-486a-a8e9-52c4bf8a5f86",
-                "task_type": "AI_INFERENCE",
-                "depends_on_task_id": "3bb9cb1b-d3d3-4c38-abf9-ec72f9afa5ca",
-                "arguments": {
-                    "system_prompt": "You are an expert trader."
-                },
-                "script_url": "s3a://ai-tool-scripts/ai-inference/llm_sentiment.go",
-                "input_schema": {},
-                "output_schema": {}
-            }
-        ]
-    },
-    {
-        "schedule_id": "ec9c27df-2876-4d5e-b4ea-8a2039f4479d",
-        "scope_id": "34c6b445-c4c2-4089-a830-9bd8a7cad314",
-        "cron": "0 * * * *",
-        "tasks": [
-            {
-                "task_id": "a36a6f20-c203-4097-a836-4afb30d01cd0",
+                "task_id": "0ff8f2fc-09b7-43e6-af8d-ae7bc00435e0",
                 "task_type": "SEARCH",
                 "depends_on_task_id": null,
                 "arguments": {},
@@ -54,20 +14,32 @@
                 "output_schema": {}
             },
             {
-                "task_id": "9bd5c14b-e56a-4730-90e9-ef1c92b146ec",
+                "task_id": "6b760f35-5512-4c42-8b23-f0023cb63da9",
                 "task_type": "ETL",
-                "depends_on_task_id": "a36a6f20-c203-4097-a836-4afb30d01cd0",
+                "depends_on_task_id": "0ff8f2fc-09b7-43e6-af8d-ae7bc00435e0",
                 "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
+                "script_url": "s3a://ai-tool-scripts/external-apis/fetch_data.py",
                 "input_schema": {},
                 "output_schema": {}
             },
             {
-                "task_id": "f54688f7-8d44-418a-b48c-441781d82f4e",
+                "task_id": "6e1b9e61-ef3f-45cd-91f7-0bd89f3a946f",
                 "task_type": "AI_INFERENCE",
-                "depends_on_task_id": "9bd5c14b-e56a-4730-90e9-ef1c92b146ec",
+                "depends_on_task_id": "6b760f35-5512-4c42-8b23-f0023cb63da9",
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/ai-inference/llm_sentiment.go",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "0a4862aa-c3a9-4707-9c32-b599289876ec",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "6e1b9e61-ef3f-45cd-91f7-0bd89f3a946f",
+                "arguments": {
+                    "scope_id": "ec1f22d5-383e-4b44-8254-3c3dfc6ba874",
+                    "schedule_id": "f3b15ce3-5d0c-4b01-8b58-647a6d180919"
+                },
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
                 "input_schema": {},
                 "output_schema": {}
             }

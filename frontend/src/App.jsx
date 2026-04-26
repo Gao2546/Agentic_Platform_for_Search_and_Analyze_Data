@@ -1,12 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import ScopeManager from './pages/ScopeManager';
+import ScopeList from './pages/ScopeList'; // เปลี่ยนจาก ScopeManager
+import ScopeDetail from './pages/ScopeDetail'; // เพิ่มหน้าใหม่
+import ScheduleFlow from './pages/ScheduleFlow';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Navigation Bar */}
         <nav className="bg-blue-800 text-white shadow-lg">
           <div className="max-w-7xl mx-auto px-4">
@@ -17,8 +19,8 @@ function App() {
                   <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
                     Dashboard
                   </Link>
-                  <Link to="/manage" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
-                    Scope Manager
+                  <Link to="/scopes" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
+                    Scopes
                   </Link>
                 </div>
               </div>
@@ -30,7 +32,9 @@ function App() {
         <main className="flex-1 max-w-7xl w-full mx-auto p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/manage" element={<ScopeManager />} />
+            <Route path="/scopes" element={<ScopeList />} />
+            <Route path="/scopes/:scopeId" element={<ScopeDetail />} />
+            <Route path="/scopes/:scopeId/schedules/:scheduleId/flow" element={<ScheduleFlow />} />
           </Routes>
         </main>
       </div>

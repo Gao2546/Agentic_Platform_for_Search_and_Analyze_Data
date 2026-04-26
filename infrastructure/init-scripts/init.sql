@@ -69,6 +69,7 @@ CREATE TYPE restart_policy_enum AS ENUM ('ALWAYS', 'ON_FAILURE', 'NEVER');
 CREATE TABLE schedules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     scope_id UUID REFERENCES scopes(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
     task_mode schedule_mode_enum NOT NULL,
     execution_type execution_type_enum NOT NULL,
     restart_policy restart_policy_enum,

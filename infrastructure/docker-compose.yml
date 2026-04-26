@@ -118,6 +118,9 @@ services:
       - AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
       - AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
+      # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
+      # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
+      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
     command: api-server
     ports:
@@ -151,6 +154,9 @@ services:
       - AIRFLOW__API_AUTH__JWT_SECRET=super_secret_jwt_key_for_airflow_3_agentic
       - AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
+      # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
+      # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
+      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
     command: scheduler
     networks:
@@ -161,7 +167,38 @@ services:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../agentic_core:/opt/agentic_core
 
-# 8. Spark Master (ตัวควบคุม Cluster)
+  # 8. Airflow DAG Processor (เพิ่มเข้ามาสำหรับ Airflow 3 โดยเฉพาะ)
+  airflow-dag-processor:
+    build: 
+      context: ../
+      dockerfile: data-pipeline/airflow/Dockerfile
+    container_name: agentic_airflow_dag_processor
+    restart: always
+    depends_on:
+      - postgres
+      - airflow-init
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:password123@postgres/agentic_db
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_ASYNC=postgresql+asyncpg://admin:password123@postgres/agentic_db
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      - AIRFLOW__API_AUTH__JWT_SECRET=super_secret_jwt_key_for_airflow_3_agentic
+      - AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
+      - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
+      - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
+      - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=30
+      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
+    command: dag-processor
+    networks:
+      - shared_net
+    volumes:
+      - ../data-pipeline/airflow/dags:/opt/airflow/dags
+      - ../data-pipeline/airflow/config:/opt/airflow/config
+      - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
+      - ../agentic_core:/opt/agentic_core
+
+  # 9. Spark Master (ตัวควบคุม Cluster)
   spark-master:
     build:
       context: ../
@@ -180,7 +217,7 @@ services:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../agentic_core:/opt/agentic_core
 
-  # 9. Spark Worker (โหนดประมวลผล)
+  # 10. Spark Worker (โหนดประมวลผล)
   spark-worker:
     build:
       context: ../
@@ -198,7 +235,7 @@ services:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../agentic_core:/opt/agentic_core
 
-# 10. Backend API Service
+  # 11. Backend API Service
   backend-api:
     build:
       context: ../ # สำคัญมาก: ต้องใช้ Root path เป็น Context เพื่อให้เห็นโฟลเดอร์ agentic_core
@@ -227,7 +264,7 @@ services:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags # แมปโฟลเดอร์ DAGs ให้ Backend มองเห็น (สำหรับ Trigger)
       - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config ให้ Backend มองเห็น (สำหรับอ่าน schedules.json)
 
-  # 11. Streaming Worker (ตัวรับข้อมูล)
+  # 12. Streaming Worker (ตัวรับข้อมูล)
   streaming-worker:
     build:
       context: ../
@@ -243,7 +280,7 @@ services:
       - rabbitmq
       - backend-api
 
-  # 12. Mock Data Stream (จำลองราคาทองคำเข้า RabbitMQ)
+  # 13. Mock Data Stream (จำลองราคาทองคำเข้า RabbitMQ)
   mock-price-stream:
     build:
       context: ../
@@ -257,7 +294,7 @@ services:
     depends_on:
       - rabbitmq
 
-  # 13. Frontend Web Application (React + Vite)
+  # 14. Frontend Web Application (React + Vite)
   frontend:
     build:
       context: ../

@@ -368,35 +368,43 @@ Write  `a .yaml file` to deploy the entire system (Airflow, Spark Workers, DBs, 
 **Phase 1: Build Data Pipeline & Infrastructure**
 
 1. **Data Lake, Data Warehouse & Storage:**
-   * ติดตั้งและเชื่อมต่อ MinIO สำเร็จ เพื่อใช้เป็น Data Lake ในการจัดเก็บข้อมูลดิบ (Raw Data) และข้อมูลที่ผ่านการประมวลผลแล้วให้อยู่ใน Silver/Gold Layer (Processed Data)[cite: 2]
-   * ติดตั้งและเชื่อมต่อ PostgreSQL สำเร็จ เพื่อใช้สำหรับจัดเก็บ Metadata ของระบบ และเตรียมพร้อมสำหรับการเก็บข้อมูล High-dimensional Vector ลงในตาราง `knowledge_embeddings` ด้วย extension `pgvector`[cite: 2]
+   * ติดตั้งและเชื่อมต่อ MinIO สำเร็จ เพื่อใช้เป็น Data Lake ในการจัดเก็บข้อมูลดิบ (Raw Data) และข้อมูลที่ผ่านการประมวลผลแล้วให้อยู่ใน Silver/Gold Layer (Processed Data)[cite: 1]
+   * ติดตั้งและเชื่อมต่อ PostgreSQL สำเร็จ เพื่อใช้สำหรับจัดเก็บ Metadata ของระบบ และเตรียมพร้อมสำหรับการเก็บข้อมูล High-dimensional Vector ลงในตาราง `knowledge_embeddings` ด้วย extension `pgvector`[cite: 1]
+   * อัปเดตโครงสร้าง Database เพิ่มคอลัมน์ `ui_position` (JSONB) เพื่อเก็บพิกัดแกน X, Y ของ Task Graph และตั้งค่า `ON DELETE CASCADE` เพื่อลบข้อมูลลดหลั่นกันอย่างมีประสิทธิภาพ
 
 2. **Data Orchestration & Compute Engine:**
-   * ตั้งค่า Apache Airflow ให้ทำหน้าที่เป็น Orchestrator สำหรับจัดการ Workflow และสั่งการตามกำหนดเวลาได้สำเร็จ[cite: 2]
+   * ตั้งค่า Apache Airflow 3 ให้ทำหน้าที่เป็น Orchestrator สำหรับจัดการ Workflow และสั่งการตามกำหนดเวลาได้สำเร็จ[cite: 1]
    * สร้าง **Dynamic DAG Factory** (`agentic_dag_factory.py`) สำเร็จ ทำให้ Airflow สามารถสแกนไฟล์ `schedules.json` จาก Backend เพื่อประกอบร่าง DAG และผูกความสัมพันธ์ (Dependencies) ของ Task อัตโนมัติ
-   * เพิ่มระบบ Validator ด้วย `croniter` ป้องกัน Airflow แครชจากกรณีที่ผู้ใช้ระบุเวลา CRON ผิดพลาด
-   * ตั้งค่า Apache Spark ให้ทำหน้าที่เป็น Compute Engine เพื่อรอรับคำสั่งการประมวลผลแบบกระจายศูนย์ (Distributed Processing) จาก Airflow ได้สำเร็จ[cite: 2]
 
 3. **(A) Workflow Batch Tasks (End-to-End Pipeline Tested):**
-   * **Task SEARCH:** สำเร็จ ทดสอบรัน Python script ดึงข้อมูลและเซฟไฟล์ลง MinIO พร้อมส่งต่อ S3 Path ให้กับ Task ถัดไปแบบอัตโนมัติผ่านระบบ Airflow XCom
-   * **Task ETL/ELT:** สำเร็จ สร้าง Custom Operator (`MinIOSparkSubmitOperator`) สั่งให้ Spark โหลดไลบรารีที่จำเป็น (Hadoop AWS, PostgreSQL Drivers) เพื่อดึงข้อมูลดิบจาก MinIO (`s3a://`) มาทำความสะอาด (Clean) และเขียนผลลัพธ์กลับลงไปในรูปแบบ Parquet/Delta Lake รวมถึงบันทึก Metadata ลง PostgreSQL
-   * **Task AI_INFERENCE:** สำเร็จ ทดสอบรันสคริปต์จำลอง (.go binary) สำหรับการให้ AI วิเคราะห์ข้อมูลสำเร็จ ทำให้ Pipeline ทั้ง 3 สเต็ปวิ่งผ่านเป็นสีเขียวสมบูรณ์แบบ
+   * **Task SEARCH:** สำเร็จ ทดสอบรัน Python script ดึงข้อมูลและเซฟไฟล์ลง MinIO พร้อมส่งต่อ S3 Path ให้กับ Task ถัดไปแบบอัตโนมัติผ่านระบบ Airflow XCom[cite: 1]
+   * **Task ETL/ELT:** สำเร็จ สร้าง Custom Operator (`MinIOSparkSubmitOperator`) สั่งให้ Spark โหลดไลบรารีที่จำเป็น (Hadoop AWS, PostgreSQL Drivers) เพื่อดึงข้อมูลดิบจาก MinIO (`s3a://`) มาทำความสะอาด (Clean) และเขียนผลลัพธ์กลับลงไปในรูปแบบ Parquet/Delta Lake รวมถึงบันทึก Metadata ลง PostgreSQL[cite: 1]
+   * **Task AI_INFERENCE:** สำเร็จ ทดสอบรันสคริปต์จำลอง (.go binary) สำหรับการให้ AI วิเคราะห์ข้อมูลสำเร็จ ทำให้ Pipeline ทั้ง 3 สเต็ปวิ่งผ่านเป็นสีเขียวสมบูรณ์แบบ[cite: 1]
 
 **Phase 2: Build AI Agent Application (Frontend & Backend)**
 
 1. **Back End (Core Services & API - FastAPI):**
-   * สร้างระบบฐานข้อมูลเชื่อมต่อ (`init.sql`) และจำลอง Dummy User ไว้ใน PostgreSQL เรียบร้อย
-   * พัฒนา API Router (`scopes_management.py`) รองรับครบทุกวงจร:
-     * `POST /scopes` และ `GET /scopes` สำหรับสร้างและดึงข้อมูลโปรเจกต์
-     * `POST /schedules` และ `GET /schedules` สำหรับจัดการตารางเวลา
-     * `POST /tools/upload` และ `GET /tools` สำหรับอัปโหลด Tool Scripts (`.py`, `.go`) โดยส่งไฟล์ไปเก็บที่ MinIO และบันทึก Metadata เข้า DB ทันที
-     * `POST /tasks` และ `GET /tasks` สำหรับเพิ่ม Task ลงใน Schedule พร้อมกำหนด Execution Order และ Dependencies ของแต่ละ Task
-   * ตั้งค่า CORS Middleware ใน FastAPI สมบูรณ์ อนุญาตให้ Frontend สื่อสารข้าม Origin ได้อย่างราบรื่น
+   * สร้างระบบฐานข้อมูลเชื่อมต่อ (`init.sql`) และจำลอง Dummy User ไว้ใน PostgreSQL เรียบร้อย[cite: 1]
+   * 🚀 **(UPDATED) Full CRUD API Router (`scopes_management.py`):** พัฒนาระบบ API จนสมบูรณ์แบบครอบคลุม:
+     * `GET`, `POST`, `PUT`, `DELETE` สำหรับการจัดการ Scope และ Schedule พร้อมระบบ Pydantic Model Validation
+     * `POST` / `GET` สำหรับ Tools Upload (เก็บลง MinIO และบันทึกลง DB ทันที)
+     * API พิเศษสำหรับการบันทึกพิกัด (`ui_position`) และความสัมพันธ์ (`depends_on_task_id`) ของ Task Graph
+     * เชื่อมต่อ Background Tasks เพื่อเขียนไฟล์ `schedules.json` ทับอัตโนมัติ และยิง HTTP Request สั่ง Airflow รีเฟรชทันทีที่มีการแก้ไขหรือลบข้อมูล
 
 2. **Front End (User Interface - React + Vite + Tailwind CSS v4):**
-   * สร้างโปรเจกต์ Frontend และจัดการ Containerize ลงใน `docker-compose.yml` สำเร็จ พร้อมระบบ Hot-Reloading
-   * **หน้า Scope & Schedule Manager:** พัฒนา UI เสร็จสมบูรณ์ (ประกอบด้วย 4 ส่วนหลัก: สร้าง Scope -> สร้าง Schedule -> อัปโหลด Tool Script -> ประกอบร่าง Pipeline Tasks) ทุกส่วนเชื่อมต่อ Database ดึง Dropdown สดแบบ Real-time
-   * **หน้า Dashboard:** พัฒนา UI รองรับการดึงข้อมูล AI Insights สรุปผลจากฐานข้อมูลมาแสดงเป็นผลลัพธ์แบบการ์ดสวยงาม
+   * สร้างโปรเจกต์ Frontend และจัดการ Containerize ลงใน `docker-compose.yml` สำเร็จ[cite: 1]
+   * 🚀 **(NEW) Hierarchical UI & Router:** ปรับโครงสร้างหน้าเว็บใหม่ทั้งหมด เปลี่ยนจาก Form ยาวหน้าเดียว เป็นระบบ **Card-based + Pop-up Modal** ที่ใช้งานง่ายและ Clean ที่สุด โดยใช้ `react-router-dom` แบ่งเป็นหน้า `/scopes` และ `/scopes/:scopeId`
+   * 🚀 **(NEW) Interactive Task Builder (Flow Graph):** นำไลบรารี `@xyflow/react` มาสร้างกระดานวาด Pipeline:
+     * ผู้ใช้สามารถคลิกเพิ่ม Task, ลากวางจัดเรียงตำแหน่ง (พิกัดถูกเซฟลง Database สดๆ)
+     * สามารถลากลูกศรเชื่อมความสัมพันธ์ (1 -> 2 -> 3) เพื่อกำหนดลำดับการทำงานใน Airflow DAG ได้ด้วยภาพ
+     * ดับเบิลคลิกที่กล่องเพื่อเปิด Modal ตั้งค่าเชิงลึก (เลือก Tool, กรอก JSON Arguments, เปลี่ยน Engine Type) ได้อย่างสะดวกรวดเร็ว
+   * **หน้า Dashboard:** พัฒนา UI รองรับการดึงข้อมูล AI Insights สรุปผลจากฐานข้อมูลมาแสดงเป็นผลลัพธ์แบบการ์ดสวยงาม[cite: 1]
+
+---
+
+**สิ่งที่เราจะทำต่อไป (Next Steps):**
+* ปรับปรุงส่วน **Dynamic Component** ในหน้า Dashboard หรือ Schedule Card เพื่อให้สามารถเรนเดอร์กราฟ (Recharts), ตาราง, หรือ Text Markdown จากข้อมูลที่ AI วิเคราะห์มาได้อย่างยืดหยุ่น
+* เชื่อมต่อระบบ Event-Trigger (Streaming Pipeline) ของจริงเข้ากับ Backend
 
 ---
 
@@ -467,7 +475,9 @@ Agentic_Platform_for_Search_and_Analyze_Data
 │   │   ├── main.jsx
 │   │   ├── pages
 │   │   │   ├── Dashboard.jsx
-│   │   │   └── ScopeManager.jsx
+│   │   │   ├── ScheduleFlow.jsx
+│   │   │   ├── ScopeDetail.jsx
+│   │   │   └── ScopeList.jsx
 │   │   └── services
 │   │       └── api.js
 │   └── vite.config.js
@@ -476,11 +486,9 @@ Agentic_Platform_for_Search_and_Analyze_Data
 ├── infrastructure
 │   ├── docker-compose.yml
 │   ├── init-scripts
-│   │   ├── init-minio-buckets.py
 │   │   ├── init-minio.sh
 │   │   └── init.sql
 │   └── k8s
-├── project_tree.txt
 ├── README.md
 ├── setup-scripts
 ├── streaming-pipeline
@@ -493,14 +501,15 @@ Agentic_Platform_for_Search_and_Analyze_Data
 │   └── requirements.txt
 ├── test
 │   └── test_e2e_flow.py
-└── tools-library
-    ├── ai-inference
-    │   └── llm_sentiment.go
-    ├── external-apis
-    │   ├── fetch_data.py
-    │   └── fetch_stock_data.py
-    └── traditional-logic
-        └── clean_and_embed.py
+├── tools-library
+│   ├── ai-inference
+│   │   └── llm_sentiment.go
+│   ├── external-apis
+│   │   ├── fetch_data.py
+│   │   └── fetch_stock_data.py
+│   └── traditional-logic
+│       └── clean_and_embed.py
+└── tree.md
 
 42 directories, 57 files
 ```

@@ -141,9 +141,10 @@ for sch in schedules:
     
     dag = DAG(
         dag_id=dag_id,
-        schedule=cron_expr,  # <-- ใช้เวลาที่ตรวจสอบแล้วว่าปลอดภัย
+        schedule=cron_expr, 
         start_date=datetime(2024, 1, 1),
         catchup=False,
+        is_paused_upon_creation=False,
         tags=['dynamic', f"scope_{sch['scope_id'][:8]}"]
     )
 
@@ -183,7 +184,8 @@ for sch in schedules:
                     application=task['script_url'],
                     conn_id='spark_default',
                     application_args=spark_args,
-                    packages='org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0'
+                    # packages='org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0'
+                    jars='/opt/airflow/jars/hadoop-aws-3.4.1.jar,/opt/airflow/jars/bundle-2.25.4.jar,/opt/airflow/jars/postgresql-42.6.0.jar'
                 )
             
             

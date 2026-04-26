@@ -1,3 +1,5 @@
+from time import timezone
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -6,6 +8,13 @@ import json
 import os
 import uuid
 import boto3
+import httpx # 👈 นำเข้า httpx
+from datetime import datetime, time, timezone
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, HTTPException
+import motor.motor_asyncio
+import os
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Scope & Schedule Management"])
 
@@ -13,8 +22,14 @@ router = APIRouter(prefix="/api/v1/projects", tags=["Scope & Schedule Management
 # Configuration
 # ==========================================
 POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://admin:password123@postgres:5432/agentic_db")
-AIRFLOW_DAGS_CONFIG_DIR = os.getenv("AIRFLOW_DAGS_CONFIG_DIR", "/opt/airflow/dags/config")
+AIRFLOW_DAGS_CONFIG_DIR = os.getenv("AIRFLOW_DAGS_CONFIG_DIR", "/opt/airflow/config")
 CONFIG_FILE_PATH = os.path.join(AIRFLOW_DAGS_CONFIG_DIR, "schedules.json")
+
+# เชื่อมต่อ MongoDB
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:password@mongodb:27017")
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+db = client["agentic_db"]
+insights_collection = db["ai_insights"]
 
 # ==========================================
 # Pydantic Models
@@ -22,19 +37,31 @@ CONFIG_FILE_PATH = os.path.join(AIRFLOW_DAGS_CONFIG_DIR, "schedules.json")
 class ScopeCreate(BaseModel):
     user_id: str
     name: str
-    description: str
-    goal: str
-    schedule_mode: str # 'MANUAL' or 'AI_AGENT'
+    description: Optional[str] = ""
+    goal: Optional[str] = ""
+    schedule_mode: str = "MANUAL"
+    status: str = "ACTIVE"
+
+class ScopeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    goal: Optional[str] = None
+    schedule_mode: Optional[str] = None
+    status: Optional[str] = None
 
 class ScheduleCreate(BaseModel):
+    name: str
     task_mode: str
     execution_type: str # 'CRON', 'ONCE', 'CONTINUOUS'
     cron_expression: Optional[str] = None
     is_sequential: bool = True
 
 class ScheduleUpdate(BaseModel):
-    cron_expression: Optional[str] = None
+    name: Optional[str] = None
+    task_mode: Optional[str] = None
     execution_type: Optional[str] = None
+    restart_policy: Optional[str] = None
+    cron_expression: Optional[str] = None
     is_sequential: Optional[bool] = None
 
 class TaskParameterUpdate(BaseModel):
@@ -51,6 +78,18 @@ class TaskCreate(BaseModel):
     depends_on_task_id: Optional[str] = None
     execution_order: int = 1
     arguments: Dict[str, Any] = {}
+    ui_position: Dict[str, float] = {"x": 100, "y": 100} # 👈 เพิ่ม
+
+class TaskPositionUpdate(BaseModel):
+    ui_position: Dict[str, float]
+
+class TaskDependencyUpdate(BaseModel):
+    depends_on_task_id: Optional[str]
+class TaskUpdate(BaseModel):
+    task_type: Optional[str] = None
+    tool_id: Optional[str] = None
+    engine_type: Optional[str] = None
+    arguments: Optional[Dict[str, Any]] = None
 
 # ==========================================
 # Core Logic: Export JSON for Airflow
@@ -102,28 +141,74 @@ async def export_schedules_to_json():
         
     print(f"✅ Exported {len(final_output)} schedules to JSON for Airflow.")
 
+    AIRFLOW_API_URL = os.getenv("AIRFLOW_API_URL", "http://agentic_airflow_webserver:8080/api/v2")
+    AIRFLOW_USER = os.getenv("AIRFLOW_USER", "admin")
+    AIRFLOW_PASSWORD = os.getenv("AIRFLOW_PASSWORD", "admin")
+    parsed_url = urlparse(AIRFLOW_API_URL)
+    AIRFLOW_BASE_URL = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
 
 # ==========================================
 # 1. Scope APIs
 # ==========================================
+@router.get("/scopes")
+async def get_scopes():
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    # 👈 ดึงข้อมูลมาให้ครบทุกฟิลด์
+    query = """
+        SELECT id, name, description, goal, schedule_mode, status 
+        FROM scopes ORDER BY created_at DESC
+    """
+    rows = await conn.fetch(query)
+    await conn.close()
+    
+    return {
+        "status": "success", 
+        "data": [{
+            "id": str(r['id']), 
+            "name": r['name'],
+            "description": r['description'],
+            "goal": r['goal'],
+            "schedule_mode": r['schedule_mode'],
+            "status": r['status']
+        } for r in rows]
+    }
+
 @router.post("/scopes")
 async def create_scope(scope: ScopeCreate):
-    conn = await asyncpg.connect(POSTGRES_DSN)
-    query = """
-        INSERT INTO scopes (user_id, name, description, goal, schedule_mode)
-        VALUES ($1::uuid, $2, $3, $4, $5) RETURNING id
-    """
-    scope_id = await conn.fetchval(query, scope.user_id, scope.name, scope.description, scope.goal, scope.schedule_mode)
-    await conn.close()
-    return {"status": "success", "scope_id": scope_id}
+    try:
+        conn = await asyncpg.connect(POSTGRES_DSN)
+        query = """
+            INSERT INTO scopes (user_id, name, description, goal, schedule_mode, status)
+            VALUES ($1::uuid, $2, $3, $4, $5, $6) RETURNING id
+        """
+        # บันทึกข้อมูลลง Database
+        scope_id = await conn.fetchval(
+            query, 
+            scope.user_id, 
+            scope.name, 
+            scope.description, 
+            scope.goal, 
+            scope.schedule_mode, 
+            scope.status
+        )
+        await conn.close()
+        
+        return {"status": "success", "scope_id": str(scope_id)}
+    except Exception as e:
+        # ดัก Error ไว้เผื่อมีปัญหาตอน Insert จะได้รู้สาเหตุชัดๆ
+        raise HTTPException(status_code=500, detail=f"Failed to create scope: {str(e)}")
 
 @router.put("/scopes/{scope_id}")
-async def update_scope(scope_id: str, updates: dict):
-    if not updates:
+async def update_scope(scope_id: str, updates: ScopeUpdate):
+    # 👈 ใช้ exclude_unset=True เพื่อเอาเฉพาะค่าที่ Frontend ส่งมาจริงๆ
+    update_data = updates.dict(exclude_unset=True) 
+    
+    if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
     
-    set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(updates.keys())])
-    values = list(updates.values())
+    set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(update_data.keys())])
+    values = list(update_data.values())
     
     conn = await asyncpg.connect(POSTGRES_DSN)
     query = f"UPDATE scopes SET {set_clause} WHERE id = $1::uuid RETURNING id"
@@ -141,16 +226,16 @@ async def update_scope(scope_id: str, updates: dict):
 async def create_schedule(scope_id: str, schedule: ScheduleCreate, background_tasks: BackgroundTasks):
     conn = await asyncpg.connect(POSTGRES_DSN)
     query = """
-        INSERT INTO schedules (scope_id, task_mode, execution_type, cron_expression, is_sequential)
-        VALUES ($1::uuid, $2, $3, $4, $5) RETURNING id
+        INSERT INTO schedules (scope_id, name, task_mode, execution_type, cron_expression, is_sequential)
+        VALUES ($1::uuid, $2, $3, $4, $5, $6) RETURNING id
     """
+    # 👈 ส่งค่า schedule.name เข้าไปด้วย
     schedule_id = await conn.fetchval(
-        query, scope_id, schedule.task_mode, schedule.execution_type, 
+        query, scope_id, schedule.name, schedule.task_mode, schedule.execution_type, 
         schedule.cron_expression, schedule.is_sequential
     )
     await conn.close()
 
-    # ถ้าสร้างเป็น CRON สั่งให้แบคกราวด์สร้างไฟล์ JSON ใหม่เผื่อให้ Airflow รับรู้
     if schedule.execution_type == 'CRON':
         background_tasks.add_task(export_schedules_to_json)
 
@@ -158,10 +243,12 @@ async def create_schedule(scope_id: str, schedule: ScheduleCreate, background_ta
 
 @router.put("/schedules/{schedule_id}")
 async def update_schedule(schedule_id: str, updates: ScheduleUpdate, background_tasks: BackgroundTasks):
+    # exclude_unset=True คือการเอาเฉพาะฟิลด์ที่ส่งค่ามาจริงๆ เท่านั้น
     update_data = updates.dict(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    # สร้าง SET clause แบบ Dynamic (รองรับการอัปเดต name อัตโนมัติ)
     set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(update_data.keys())])
     values = list(update_data.values())
     
@@ -289,17 +376,67 @@ async def get_tools():
 async def get_schedules_by_scope(scope_id: str):
     """ดึงตารางเวลาทั้งหมดที่อยู่ใน Scope นั้นๆ"""
     conn = await asyncpg.connect(POSTGRES_DSN)
-    rows = await conn.fetch("SELECT id, execution_type, cron_expression FROM schedules WHERE scope_id = $1::uuid ORDER BY created_at DESC", scope_id)
+    query = """
+        SELECT id, name, execution_type, cron_expression, task_mode, restart_policy, is_sequential 
+        FROM schedules WHERE scope_id = $1::uuid ORDER BY created_at DESC
+    """
+    rows = await conn.fetch(query, scope_id)
     await conn.close()
-    return {"status": "success", "data": [{"id": str(r['id']), "type": r['execution_type'], "cron": r['cron_expression']} for r in rows]}
+    
+    return {
+        "status": "success", 
+        "data": [{
+            "id": str(r['id']), 
+            "name": r['name'], 
+            "type": r['execution_type'], 
+            "cron": r['cron_expression'],
+            "task_mode": r['task_mode'],
+            "restart_policy": r['restart_policy'],
+            "is_sequential": r['is_sequential']
+        } for r in rows]
+    }
 
+# 2. แก้ไข GET /schedules/{schedule_id}/tasks
 @router.get("/schedules/{schedule_id}/tasks")
 async def get_tasks_by_schedule(schedule_id: str):
-    """ดึง Task ที่มีอยู่แล้วใน Schedule นั้นๆ (เพื่อใช้ผูก Dependencies)"""
     conn = await asyncpg.connect(POSTGRES_DSN)
-    rows = await conn.fetch("SELECT id, task_type, execution_order FROM tasks WHERE schedule_id = $1::uuid ORDER BY execution_order ASC", schedule_id)
+    # 👈 ดึง ui_position และ depends_on_task_id เพิ่ม
+    query = """
+        SELECT id, task_type, execution_order, depends_on_task_id, ui_position, arguments 
+        FROM tasks WHERE schedule_id = $1::uuid ORDER BY execution_order ASC
+    """
+    rows = await conn.fetch(query, schedule_id)
     await conn.close()
-    return {"status": "success", "data": [{"id": str(r['id']), "task_type": r['task_type'], "order": r['execution_order']} for r in rows]}
+    
+    return {
+        "status": "success", 
+        "data": [{
+            "id": str(r['id']), 
+            "task_type": r['task_type'], 
+            "order": r['execution_order'],
+            "depends_on_task_id": str(r['depends_on_task_id']) if r['depends_on_task_id'] else None,
+            "ui_position": json.loads(r['ui_position']) if isinstance(r['ui_position'], str) else r['ui_position'],
+            "arguments": json.loads(r['arguments']) if isinstance(r['arguments'], str) else (r['arguments'] or {})
+        } for r in rows]
+    }
+
+# 3. เพิ่ม API สำหรับอัปเดต X, Y ตอนลากกล่อง
+@router.put("/tasks/{task_id}/position")
+async def update_task_position(task_id: str, data: TaskPositionUpdate):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = "UPDATE tasks SET ui_position = $1::jsonb WHERE id = $2::uuid"
+    await conn.execute(query, json.dumps(data.ui_position), task_id)
+    await conn.close()
+    return {"status": "success"}
+
+# 4. เพิ่ม API สำหรับอัปเดตเส้นเชื่อม (Dependencies)
+@router.put("/tasks/{task_id}/dependency")
+async def update_task_dependency(task_id: str, data: TaskDependencyUpdate):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = "UPDATE tasks SET depends_on_task_id = $1::uuid WHERE id = $2::uuid"
+    await conn.execute(query, data.depends_on_task_id, task_id)
+    await conn.close()
+    return {"status": "success"}
 
 # ==========================================
 # 7. POST API สร้าง Task ลงใน Schedule
@@ -324,3 +461,91 @@ async def create_task(schedule_id: str, task: TaskCreate, background_tasks: Back
     background_tasks.add_task(export_schedules_to_json)
     
     return {"status": "success", "task_id": str(task_id)}
+
+@router.put("/tasks/{task_id}")
+async def update_task_full(task_id: str, updates: TaskUpdate, background_tasks: BackgroundTasks):
+    update_data = updates.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    # ถ้ามีการอัปเดต arguments ต้องแปลงเป็น JSON String ก่อนลง DB
+    if 'arguments' in update_data:
+        update_data['arguments'] = json.dumps(update_data['arguments'])
+
+    set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(update_data.keys())])
+    values = list(update_data.values())
+    
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = f"UPDATE tasks SET {set_clause} WHERE id = $1::uuid RETURNING id"
+    updated_id = await conn.fetchval(query, task_id, *values)
+    await conn.close()
+    
+    if not updated_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    background_tasks.add_task(export_schedules_to_json)
+    return {"status": "success", "message": "Task updated"}
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, background_tasks: BackgroundTasks):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    # จะลบ Task ต้องลบเส้นเชื่อมที่ชี้มาหามันด้วย (แต่เราตั้ง ON DELETE SET NULL/CASCADE ไว้ใน init.sql แล้ว)
+    query = "DELETE FROM tasks WHERE id = $1::uuid RETURNING id"
+    deleted_id = await conn.fetchval(query, task_id)
+    await conn.close()
+    
+    if not deleted_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    background_tasks.add_task(export_schedules_to_json)
+    return {"status": "success", "message": "Task deleted"}
+
+# ==========================================
+# API สำหรับ Delete Scope & Schedule
+# ==========================================
+@router.delete("/scopes/{scope_id}")
+async def delete_scope(scope_id: str, background_tasks: BackgroundTasks):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = "DELETE FROM scopes WHERE id = $1::uuid RETURNING id"
+    deleted_id = await conn.fetchval(query, scope_id)
+    await conn.close()
+    
+    if not deleted_id:
+        raise HTTPException(status_code=404, detail="Scope not found")
+    
+    background_tasks.add_task(export_schedules_to_json)
+    return {"status": "success", "message": "Scope deleted"}
+
+@router.delete("/schedules/{schedule_id}")
+async def delete_schedule(schedule_id: str, background_tasks: BackgroundTasks):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = "DELETE FROM schedules WHERE id = $1::uuid RETURNING id"
+    deleted_id = await conn.fetchval(query, schedule_id)
+    await conn.close()
+    
+    if not deleted_id:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+        
+    # สั่งให้ Airflow อัปเดตไฟล์ JSON ทันทีที่ตารางเวลาถูกลบ
+    background_tasks.add_task(export_schedules_to_json)
+    return {"status": "success", "message": "Schedule deleted"}
+
+
+@router.get("/schedules/{schedule_id}/insights")
+async def get_schedule_insights(schedule_id: str):
+    """ดึงข้อมูล JSON Blocks ล่าสุดของ Schedule นั้นๆ จาก MongoDB"""
+    try:
+        # ค้นหาผลลัพธ์ล่าสุดของ schedule นี้ เรียงตามเวลาล่าสุด (ลดหลั่นลงมา)
+        insight = await insights_collection.find_one(
+            {"schedule_id": schedule_id},
+            sort=[("created_at", -1)] # เอาอันล่าสุด
+        )
+
+        if not insight or "blocks" not in insight:
+            return {"status": "success", "data": []} # ถ้าไม่มีข้อมูล ส่ง Array ว่างกลับไป
+
+        # ส่ง JSON Blocks กลับไปให้ Frontend
+        return {"status": "success", "data": insight["blocks"]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

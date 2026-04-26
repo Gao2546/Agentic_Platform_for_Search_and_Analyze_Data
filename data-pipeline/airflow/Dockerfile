@@ -1,5 +1,5 @@
 # Use your exact base image
-FROM apache/airflow:3.1.2
+FROM apache/airflow:3.1.8
 
 USER root
 RUN apt-get update \

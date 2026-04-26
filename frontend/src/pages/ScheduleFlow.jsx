@@ -1,0 +1,322 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  ReactFlow, Background, Controls, MiniMap, 
+  applyNodeChanges, applyEdgeChanges, addEdge, MarkerType
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { projectAPI } from '../services/api';
+import DynamicWidgetRenderer from '../components/DynamicWidgetRenderer';
+
+export default function ScheduleFlow() {
+    const { scopeId, scheduleId } = useParams();
+    const navigate = useNavigate();
+    
+    const [nodes, setNodes] = useState([]);
+    const [edges, setEdges] = useState([]);
+    const [tools, setTools] = useState([]); 
+    const [loading, setLoading] = useState(true);
+
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [editingTask, setEditingTask] = useState(null);
+    const [taskFormData, setTaskFormData] = useState({
+        task_type: 'SEARCH',
+        tool_id: '',
+        engine_type: 'AIRFLOW_DAG',
+        arguments: '{\n  \n}'
+    });
+
+    // 🚀 NEW: State สำหรับ Tool Upload Modal
+    const [isToolModalOpen, setIsToolModalOpen] = useState(false);
+    const [toolFile, setToolFile] = useState(null);
+    const [toolFormData, setToolFormData] = useState({
+        name: '',
+        language: 'Python',
+        author_type: 'HUMAN'
+    });
+
+    const [insightsBlocks, setInsightsBlocks] = useState([]);
+    const [activeTab, setActiveTab] = useState('pipeline'); 
+
+    useEffect(() => { 
+        loadFlowData(); 
+        loadTools();
+        loadInsightsData(); 
+    }, [scheduleId]);
+
+    const loadTools = async () => {
+        try {
+            const res = await projectAPI.getTools();
+            setTools(res.data.data || []);
+        } catch (error) { console.error("Failed to fetch tools", error); }
+    };
+
+    const loadInsightsData = async () => {
+        try {
+            // setTimeout(() => {
+            //     setInsightsBlocks([
+            //         { id: "b1", type: "metric", colSpan: 4, label: "RSI (14 Days)", value: "72.5", trend: "up", color: "red" },
+            //         { id: "b2", type: "metric", colSpan: 4, label: "Market Sentiment", value: "Bullish", trend: "up", color: "green" },
+            //         { id: "b3", type: "metric", colSpan: 4, label: "Execution Status", value: "Success", trend: "up", color: "blue" }
+            //     ]);
+            // }, 800);
+            const res = await projectAPI.getScheduleInsights(scheduleId);
+            setInsightsBlocks(res.data.data || []);
+        } catch (error) { console.error("Failed to load insights", error); }
+    };
+
+    const loadFlowData = async () => {
+        try {
+            const res = await projectAPI.getTasksBySchedule(scheduleId);
+            const tasks = res.data.data || [];
+            
+            const initialNodes = tasks.map((task) => ({
+                id: task.id,
+                position: task.ui_position || { x: 100 + Math.random() * 50, y: 100 + Math.random() * 50 },
+                data: { 
+                    label: (
+                        <div>
+                            <div className="text-xs text-gray-400">Order: {task.order}</div>
+                            <div className="font-bold text-indigo-700">{task.task_type}</div>
+                        </div>
+                    ),
+                    originalData: task 
+                },
+                arguments: task.arguments,
+                type: 'default',
+                style: {
+                    background: '#fff', border: '2px solid #6366f1', borderRadius: '8px', padding: '10px', width: 160, textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }
+            }));
+
+            const initialEdges = tasks.filter(task => task.depends_on_task_id).map(task => ({
+                id: `e-${task.depends_on_task_id}-${task.id}`,
+                source: task.depends_on_task_id, target: task.id,
+                animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' }, style: { stroke: '#6366f1', strokeWidth: 2 }
+            }));
+
+            setNodes(initialNodes);
+            setEdges(initialEdges);
+        } catch (error) { console.error("Failed to load tasks", error); } 
+        finally { setLoading(false); }
+    };
+
+    const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
+    const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+
+    const onNodeDragStop = async (event, node) => {
+        try { await projectAPI.updateTaskPosition(node.id, { x: node.position.x, y: node.position.y }); } 
+        catch (error) { console.error("Failed to save position", error); }
+    };
+
+    const onConnect = async (params) => {
+        setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' }, style: { stroke: '#6366f1', strokeWidth: 2 } }, eds));
+        try { await projectAPI.updateTaskDependency(params.target, params.source); } 
+        catch (error) { console.error("Failed to save dependency", error); }
+    };
+
+    const handleAddNewTask = () => {
+        setEditingTask(null);
+        setTaskFormData({ task_type: 'SEARCH', tool_id: tools[0]?.id || '', engine_type: 'AIRFLOW_DAG', arguments: '{\n  \n}' });
+        setIsTaskModalOpen(true);
+    };
+
+    const onNodeDoubleClick = async (event, node) => {
+        const task = node.data.originalData;
+        setEditingTask(task);
+        setTaskFormData({
+            task_type: task.task_type || 'SEARCH', tool_id: task.tool_id || tools[0]?.id || '',
+            engine_type: task.engine_type || 'AIRFLOW_DAG', arguments: task.arguments ? JSON.stringify(task.arguments, null, 2) : '{\n  \n}'
+        });
+        setIsTaskModalOpen(true);
+    };
+
+    const handleSaveTask = async (e) => {
+        e.preventDefault();
+        let parsedArgs = {};
+        try { parsedArgs = JSON.parse(taskFormData.arguments); } 
+        catch (err) { alert("รูปแบบ JSON ไม่ถูกต้อง"); return; }
+
+        const payload = { ...taskFormData, arguments: parsedArgs, execution_order: editingTask ? editingTask.order : nodes.length + 1 };
+        try {
+            if (editingTask) await projectAPI.updateTask(editingTask.id, payload);
+            else { payload.ui_position = { x: 250, y: 150 }; await projectAPI.createTask(scheduleId, payload); }
+            setIsTaskModalOpen(false); loadFlowData();
+        } catch (error) { alert(`Error: ${error.message}`); }
+    };
+
+    const handleDeleteTask = async () => {
+        if (!editingTask) return;
+        if (!window.confirm("แน่ใจหรือไม่ที่จะลบ Task นี้?")) return;
+        try { await projectAPI.deleteTask(editingTask.id); setIsTaskModalOpen(false); loadFlowData(); } 
+        catch (error) { alert(`Error: ${error.message}`); }
+    };
+
+    // 🚀 NEW: ฟังก์ชันส่งไฟล์ Tool ไปให้ Backend
+    const handleUploadToolSubmit = async (e) => {
+        e.preventDefault();
+        if (!toolFile) { alert("กรุณาเลือกไฟล์ Tool Script ก่อนอัปโหลด"); return; }
+
+        const formData = new FormData();
+        formData.append('name', toolFormData.name);
+        formData.append('language', toolFormData.language);
+        formData.append('author_type', toolFormData.author_type);
+        formData.append('file', toolFile);
+
+        try {
+            const res = await projectAPI.uploadTool(formData);
+            alert("✅ อัปโหลด Tool สำเร็จ!");
+            setIsToolModalOpen(false); // ปิด Modal
+            setToolFile(null); // ล้างไฟล์ที่เลือก
+            setToolFormData({ name: '', language: 'Python', author_type: 'HUMAN' });
+            
+            // โหลดรายการ Tool ใหม่ และเลือก Tool ที่เพิ่งอัปโหลดให้ทันที
+            await loadTools();
+            if (res.data.tool_id) {
+                setTaskFormData(prev => ({ ...prev, tool_id: res.data.tool_id }));
+            }
+        } catch (error) {
+            alert(`อัปโหลดล้มเหลว: ${error.response?.data?.detail || error.message}`);
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500 font-bold mt-10">กำลังโหลดข้อมูล...</div>;
+
+    return (
+        <div className="flex flex-col h-[85vh] bg-gray-50 border rounded-xl shadow-lg overflow-hidden relative">
+            <div className="p-4 border-b bg-white flex justify-between items-center z-10 shadow-sm">
+                <div>
+                    <h2 className="text-xl font-bold text-gray-800">⛓️ Schedule Manager</h2>
+                    <div className="flex mt-2 space-x-1 bg-gray-100 p-1 rounded-lg w-max">
+                        <button onClick={() => setActiveTab('pipeline')} className={`px-4 py-1 text-sm font-bold rounded-md transition ${activeTab === 'pipeline' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>🔀 Pipeline Builder</button>
+                        <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-1 text-sm font-bold rounded-md transition ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>📊 Results Dashboard</button>
+                    </div>
+                </div>
+                <div className="space-x-3 flex items-center">
+                    <button onClick={() => navigate(`/scopes/${scopeId}`)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium transition">ย้อนกลับ</button>
+                    {activeTab === 'pipeline' && (
+                        <button onClick={handleAddNewTask} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow transition">+ เพิ่ม Task ใหม่</button>
+                    )}
+                </div>
+            </div>
+
+            <div className={`flex-1 w-full h-full relative ${activeTab === 'pipeline' ? 'block' : 'hidden'}`}>
+                <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeDragStop={onNodeDragStop} onNodeDoubleClick={onNodeDoubleClick} fitView>
+                    <Background color="#ccc" gap={16} />
+                    <Controls />
+                    <MiniMap zoomable pannable nodeColor="#6366f1" maskColor="rgba(0,0,0,0.1)" />
+                </ReactFlow>
+            </div>
+
+            <div className={`flex-1 w-full h-full overflow-y-auto bg-gray-50 p-6 ${activeTab === 'dashboard' ? 'block' : 'hidden'}`}>
+                <DynamicWidgetRenderer blocks={insightsBlocks} />
+            </div>
+
+            {/* Modal หลัก: Task Configuration */}
+            {isTaskModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h2 className="text-2xl font-bold text-gray-800">{editingTask ? '⚙️ ตั้งค่า Task' : '✨ สร้าง Task ใหม่'}</h2>
+                            <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
+                        </div>
+                        <form onSubmit={handleSaveTask} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ประเภทงาน</label>
+                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500" value={taskFormData.task_type} onChange={e => setTaskFormData({...taskFormData, task_type: e.target.value})}>
+                                        <option value="SEARCH">SEARCH</option>
+                                        <option value="ETL">ETL</option>
+                                        <option value="TRADITIONAL_LOGIC">TRADITIONAL_LOGIC</option>
+                                        <option value="AI_INFERENCE">AI_INFERENCE</option>
+                                        <option value="VISUALIZE">VISUALIZE</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">Engine ที่รัน</label>
+                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500" value={taskFormData.engine_type} onChange={e => setTaskFormData({...taskFormData, engine_type: e.target.value})}>
+                                        <option value="AIRFLOW_DAG">AIRFLOW_DAG</option>
+                                        <option value="STREAMING_WORKER">STREAMING_WORKER</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            {/* 🚀 ตรงนี้คือจุดที่เราเพิ่มปุ่ม Upload */}
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-gray-700 text-sm font-bold">Tool Script ที่เรียกใช้</label>
+                                    <button type="button" onClick={() => setIsToolModalOpen(true)} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline">
+                                        + อัปโหลด Tool ใหม่
+                                    </button>
+                                </div>
+                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500" value={taskFormData.tool_id} onChange={e => setTaskFormData({...taskFormData, tool_id: e.target.value})} required>
+                                    <option value="" disabled>-- กรุณาเลือก Tool Script --</option>
+                                    {tools.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-gray-700 text-sm font-bold mb-1">การตั้งค่า Arguments (JSON)</label>
+                                <textarea className="w-full border p-2 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500" rows="5" value={taskFormData.arguments} onChange={e => setTaskFormData({...taskFormData, arguments: e.target.value})} />
+                            </div>
+                            <div className="flex justify-between pt-4 border-t mt-4">
+                                {editingTask ? <button type="button" onClick={handleDeleteTask} className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 font-bold rounded">🗑️ ลบ Task</button> : <div />} 
+                                <div className="space-x-3">
+                                    <button type="button" onClick={() => setIsTaskModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">ยกเลิก</button>
+                                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">บันทึก</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* 🚀 NEW: Modal สำหรับอัปโหลด Tool */}
+            {isToolModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border-t-4 border-indigo-500">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-gray-800">📤 อัปโหลด Tool Script</h2>
+                            <button onClick={() => setIsToolModalOpen(false)} className="text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
+                        </div>
+                        <form onSubmit={handleUploadToolSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-700 text-sm font-bold mb-1">ชื่อ Tool (Display Name)</label>
+                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                    value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} placeholder="เช่น สคริปต์วิเคราะห์ RSI" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ภาษา (Language)</label>
+                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={toolFormData.language} onChange={e => setToolFormData({...toolFormData, language: e.target.value})}>
+                                        <option value="Python">Python</option>
+                                        <option value="Go">Go</option>
+                                        <option value="C++">C++</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ผู้สร้าง (Author)</label>
+                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={toolFormData.author_type} onChange={e => setToolFormData({...toolFormData, author_type: e.target.value})}>
+                                        <option value="HUMAN">HUMAN</option>
+                                        <option value="AI_GENERATED">AI_GENERATED</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-bold mb-1">ไฟล์ Script (.py, .go)</label>
+                                <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                                    onChange={e => setToolFile(e.target.files[0])} required />
+                            </div>
+                            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                                <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">ยกเลิก</button>
+                                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">ยืนยันอัปโหลด</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
