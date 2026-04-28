@@ -400,10 +400,13 @@ async def get_schedules_by_scope(scope_id: str):
 @router.get("/schedules/{schedule_id}/tasks")
 async def get_tasks_by_schedule(schedule_id: str):
     conn = await asyncpg.connect(POSTGRES_DSN)
-    # 👈 ดึง ui_position และ depends_on_task_id เพิ่ม
+    
+    # 👈 ดึง tool_id และ engine_type เพิ่ม เพื่อให้ Frontend นำไปใช้ในหน้า Modal แก้ไข Task
     query = """
-        SELECT id, task_type, execution_order, depends_on_task_id, ui_position, arguments 
-        FROM tasks WHERE schedule_id = $1::uuid ORDER BY execution_order ASC
+        SELECT id, task_type, tool_id, engine_type, execution_order, depends_on_task_id, ui_position, arguments 
+        FROM tasks 
+        WHERE schedule_id = $1::uuid 
+        ORDER BY execution_order ASC
     """
     rows = await conn.fetch(query, schedule_id)
     await conn.close()
@@ -413,29 +416,33 @@ async def get_tasks_by_schedule(schedule_id: str):
         "data": [{
             "id": str(r['id']), 
             "task_type": r['task_type'], 
+            "tool_id": str(r['tool_id']) if r['tool_id'] else "", # เผื่อกรณี Task บางประเภทไม่มี tool_id
+            "engine_type": r['engine_type'] if r['engine_type'] else "AIRFLOW_DAG", # Default ตาม Frontend
             "order": r['execution_order'],
             "depends_on_task_id": str(r['depends_on_task_id']) if r['depends_on_task_id'] else None,
-            "ui_position": json.loads(r['ui_position']) if isinstance(r['ui_position'], str) else r['ui_position'],
+            "ui_position": json.loads(r['ui_position']) if isinstance(r['ui_position'], str) else (r['ui_position'] or {"x": 250, "y": 150}),
             "arguments": json.loads(r['arguments']) if isinstance(r['arguments'], str) else (r['arguments'] or {})
         } for r in rows]
     }
 
 # 3. เพิ่ม API สำหรับอัปเดต X, Y ตอนลากกล่อง
 @router.put("/tasks/{task_id}/position")
-async def update_task_position(task_id: str, data: TaskPositionUpdate):
+async def update_task_position(task_id: str, data: TaskPositionUpdate, background_tasks: BackgroundTasks):
     conn = await asyncpg.connect(POSTGRES_DSN)
     query = "UPDATE tasks SET ui_position = $1::jsonb WHERE id = $2::uuid"
     await conn.execute(query, json.dumps(data.ui_position), task_id)
     await conn.close()
+    background_tasks.add_task(export_schedules_to_json)
     return {"status": "success"}
 
 # 4. เพิ่ม API สำหรับอัปเดตเส้นเชื่อม (Dependencies)
 @router.put("/tasks/{task_id}/dependency")
-async def update_task_dependency(task_id: str, data: TaskDependencyUpdate):
+async def update_task_dependency(task_id: str, data: TaskDependencyUpdate, background_tasks: BackgroundTasks):
     conn = await asyncpg.connect(POSTGRES_DSN)
     query = "UPDATE tasks SET depends_on_task_id = $1::uuid WHERE id = $2::uuid"
     await conn.execute(query, data.depends_on_task_id, task_id)
     await conn.close()
+    background_tasks.add_task(export_schedules_to_json)
     return {"status": "success"}
 
 # ==========================================

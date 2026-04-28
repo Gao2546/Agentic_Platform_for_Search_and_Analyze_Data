@@ -41,7 +41,7 @@ class MinIOSparkSubmitOperator(SparkSubmitOperator):
             self.log.info(f"📥 Downloading Spark script from {script_url} to {local_script_path}")
             s3_client.download_file(bucket_name, object_key, local_script_path)
             
-            # 💡 เขียนทับตัวแปรทั้งสองแบบ เพื่อบังคับให้ Hook มองเห็นไฟล์ Local
+            # เขียนทับตัวแปรทั้งสองแบบ เพื่อบังคับให้ Hook มองเห็นไฟล์ Local
             self.application = local_script_path
             self._application = local_script_path
             
@@ -109,6 +109,7 @@ def generic_python_executor(**kwargs):
         else:
             cmd = ["python3", local_script_path]
         
+        # args_dict ตอนนี้จะมี scope_id, schedule_id, task_id ครบถ้วนแล้วจากการจัดการในลูปสร้าง DAG
         for k, v in args_dict.items():
             cmd.extend([f"--{k}", str(v)])
 
@@ -130,13 +131,11 @@ schedules = load_schedules_from_json()
 for sch in schedules:
     cron_expr = sch.get('cron')
     
-    # 💡 เพิ่มระบบป้องกัน: ตรวจสอบว่ารูปแบบ CRON ถูกต้องหรือไม่
-    # ถ้าพิมพ์มาผิด ให้ข้าม (continue) ไปสร้าง DAG ตัวถัดไปเลย ระบบจะได้ไม่พัง
+    # เพิ่มระบบป้องกัน: ตรวจสอบว่ารูปแบบ CRON ถูกต้องหรือไม่
     if cron_expr and not croniter.is_valid(cron_expr):
         logging.error(f"❌ ข้ามการสร้าง DAG: รูปแบบ CRON '{cron_expr}' ไม่ถูกต้อง สำหรับ Schedule {sch['schedule_id']}")
         continue
 
-    # ถ้าถูกต้อง ก็สร้าง DAG ตามปกติ
     dag_id = f"dynamic_scope_{sch['scope_id'][:8]}_sch_{sch['schedule_id'][:8]}"
     
     dag = DAG(
@@ -150,22 +149,33 @@ for sch in schedules:
 
     with dag:
         operator_dict = {}
-        
-        # 💡 1. สร้าง Map สำหรับแปลง task_id ของ DB ให้เป็น task_id ของ Airflow
         task_mapping = {t['task_id']: f"{t['task_type'].lower()}_{t['task_id'][:8]}" for t in sch.get('tasks', [])}
         
         # 3.1 สร้าง Operator ให้ครบทุก Task
         for task in sch.get('tasks', []):
             t_id = task_mapping[task['task_id']]
             
-            if task['task_type'] in ['SEARCH', 'TRADITIONAL_LOGIC', 'AI_INFERENCE', 'VISUALIZE']:
+            # 💡 [NEW] ตรวจสอบและเติม arguments ที่ขาดหายไป (scope_id, schedule_id, task_id)
+            if 'arguments' not in task or not isinstance(task['arguments'], dict):
+                task['arguments'] = {}
+                
+            if 'scope_id' not in task['arguments']:
+                task['arguments']['scope_id'] = sch.get('scope_id', 'unknown_scope')
+            if 'schedule_id' not in task['arguments']:
+                task['arguments']['schedule_id'] = sch.get('schedule_id', 'unknown_schedule')
+            if 'task_id' not in task['arguments']:
+                task['arguments']['task_id'] = task.get('task_id', 'unknown_task')
+            
+            # ----------------------------------------------------
+            
+            if task['task_type'] in ['SEARCH', 'TRADITIONAL_LOGIC', 'AI_INFERENCE']:
                 operator = PythonOperator(
                     task_id=t_id,
                     python_callable=generic_python_executor,
                     op_kwargs={'task_config': task},
                 )
             
-            elif task['task_type'] == 'ETL':
+            elif task['task_type'] in ['ETL', 'VISUALIZE']:
                 dep_id = task.get('depends_on_task_id')
                 if dep_id and dep_id in task_mapping:
                     parent_airflow_id = task_mapping[dep_id]
@@ -173,21 +183,26 @@ for sch in schedules:
                 else:
                     dynamic_input_path = task['arguments'].get('custom_input_path', 'default_path')
 
+                # 💡 [NEW] สร้าง spark_args โดยดึงค่าพื้นฐานมาจาก task['arguments'] ที่ถูกเติมเต็มแล้ว
                 spark_args = [
                     '--input_path', dynamic_input_path,
-                    '--scope_id', sch['scope_id'],
-                    '--schedule_id', sch['schedule_id'],
+                    '--scope_id', str(task['arguments']['scope_id']),
+                    '--schedule_id', str(task['arguments']['schedule_id']),
+                    '--task_id', str(task['arguments']['task_id'])
                 ]
+                
+                # วนลูปเผื่อมี Argument อื่นๆ ที่กำหนดไว้ใน UI และต้องส่งให้ Spark (เช่น tags)
+                for k, v in task['arguments'].items():
+                    if k not in ['scope_id', 'schedule_id', 'task_id', 'custom_input_path']:
+                        spark_args.extend([f"--{k}", str(v)])
                 
                 operator = MinIOSparkSubmitOperator(
                     task_id=t_id,
                     application=task['script_url'],
                     conn_id='spark_default',
                     application_args=spark_args,
-                    # packages='org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0'
                     jars='/opt/airflow/jars/hadoop-aws-3.4.1.jar,/opt/airflow/jars/bundle-2.25.4.jar,/opt/airflow/jars/postgresql-42.6.0.jar'
                 )
-            
             
             # เก็บเข้า Dictionary ไว้โยงเส้นทีหลัง
             operator_dict[task['task_id']] = (t_id, operator)
@@ -200,8 +215,7 @@ for sch in schedules:
                 parent_op = operator_dict[dep_task_id][1]
                 child_op = operator_dict[task['task_id']][1]
                 
-                # โยงเส้น!
                 parent_op >> child_op
 
-    # 4. ยัด DAG ที่สมบูรณ์แล้วลงใน Global Namespace เพื่อให้ Airflow ตรวจเจอ
+    # 4. ยัด DAG ที่สมบูรณ์แล้วลงใน Global Namespace
     globals()[dag_id] = dag

@@ -19,13 +19,22 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \
     rm get-pip.py
 
-# 4. ติดตั้ง Libraries
+# 4. ติดตั้ง Libraries (🔥 อัปเกรด pyspark เป็น 4.0.2 ให้ตรงกับ Base Image)
 RUN python3 -m pip install --no-cache-dir \
     pymongo \
     psycopg2-binary \
-    asyncpg
+    asyncpg \
+    pyspark==4.0.2 \
+    pillow \
+    boto3 \
+    opencv-python
+
+# 1. ก๊อปปี้และติดตั้ง Shared Library (agentic_core)
+COPY agentic_core /app/agentic_core
+RUN pip install -e /app/agentic_core
 
 # 5. ดาวน์โหลด JAR files ที่จำเป็น 
+# (หมายเหตุ: Spark 4.0.x ถูกคอมไพล์มาพร้อม Hadoop 3.4.x ดังนั้นใช้ hadoop-aws-3.4.1.jar ตัวนี้ได้เลย ถูกต้องแล้วครับ)
 RUN wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.4.1/hadoop-aws-3.4.1.jar -P /opt/spark/jars/ && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/2.25.4/bundle-2.25.4.jar -P /opt/spark/jars/ && \
     wget https://repo1.maven.org/maven2/org/postgresql/postgresql/42.6.0/postgresql-42.6.0.jar -P /opt/spark/jars/

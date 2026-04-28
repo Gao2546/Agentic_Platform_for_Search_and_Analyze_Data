@@ -92,6 +92,8 @@ CREATE TABLE tasks (
     execution_order INT,
     broker_topic VARCHAR(255),
     arguments JSONB,
+    input_schema JSONB,
+    output_schema JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -149,6 +151,7 @@ CREATE TABLE file_assets (
     -- =========================================================
     udtp_scope_ids UUID[] NOT NULL DEFAULT '{}',
     udtp_schedule_ids UUID[] NOT NULL DEFAULT '{}',
+    udtp_task_ids UUID[] NOT NULL DEFAULT '{}',
     udtp_tags TEXT[] DEFAULT '{}',
     udtp_stage data_stage_enum NOT NULL
 );
@@ -163,5 +166,6 @@ CREATE INDEX idx_file_assets_path ON file_assets (file_path);
 -- 2. GIN Indexes สำหรับค้นหาไฟล์ด้วย UDTP Logic (Intersection / Union)
 CREATE INDEX idx_file_assets_udtp_scopes ON file_assets USING GIN (udtp_scope_ids);
 CREATE INDEX idx_file_assets_udtp_schedules ON file_assets USING GIN (udtp_schedule_ids);
+CREATE INDEX idx_file_assets_udtp_tasks ON file_assets USING GIN (udtp_task_ids);
 CREATE INDEX idx_file_assets_udtp_tags ON file_assets USING GIN (udtp_tags);
 CREATE INDEX idx_file_assets_udtp_stage ON file_assets (udtp_stage);

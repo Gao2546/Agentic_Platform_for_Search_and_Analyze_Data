@@ -5,6 +5,8 @@
 /build
 /.env
 /env
+/config
+/logs
 /.vscode
 .DS_Store
 *.log

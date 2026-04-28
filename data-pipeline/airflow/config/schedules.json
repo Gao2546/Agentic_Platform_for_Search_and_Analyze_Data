@@ -1,5 +1,48 @@
 [
     {
+        "schedule_id": "ab57de40-8337-4a43-a422-5d53ff1aea29",
+        "scope_id": "5e7bd6de-dd94-4414-9ffd-80fef373d43a",
+        "cron": "0 8 * * *",
+        "tasks": [
+            {
+                "task_id": "9490b217-d7c9-452c-bae1-a474135c19da",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_data.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "742eaa44-2b84-47d4-994f-10047e8de373",
+                "task_type": "ETL",
+                "depends_on_task_id": "9490b217-d7c9-452c-bae1-a474135c19da",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "55480102-b53a-41ec-8377-76e397446df5",
+                "task_type": "AI_INFERENCE",
+                "depends_on_task_id": "742eaa44-2b84-47d4-994f-10047e8de373",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/rule_base_sentiment.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "25033266-eadd-4751-bf6c-b17efdc924c7",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "55480102-b53a-41ec-8377-76e397446df5",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
+                "input_schema": {},
+                "output_schema": {}
+            }
+        ]
+    },
+    {
         "schedule_id": "f3b15ce3-5d0c-4b01-8b58-647a6d180919",
         "scope_id": "ec1f22d5-383e-4b44-8254-3c3dfc6ba874",
         "cron": "30 0 * * *",
@@ -18,7 +61,7 @@
                 "task_type": "ETL",
                 "depends_on_task_id": "0ff8f2fc-09b7-43e6-af8d-ae7bc00435e0",
                 "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/external-apis/fetch_data.py",
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
                 "input_schema": {},
                 "output_schema": {}
             },
