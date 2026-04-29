@@ -1,34 +1,44 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import ScopeList from './pages/ScopeList'; // เปลี่ยนจาก ScopeManager
-import ScopeDetail from './pages/ScopeDetail'; // เพิ่มหน้าใหม่
+import ScopeList from './pages/ScopeList';
+import ScopeDetail from './pages/ScopeDetail';
 import ScheduleFlow from './pages/ScheduleFlow';
+import { useTranslation } from 'react-i18next'; 
+
+const LANGUAGES = [
+  { code: 'en', name: 'English' }, { code: 'es', name: 'Spanish' },
+  { code: 'ru', name: 'Russian' }, { code: 'de', name: 'German' },
+  { code: 'fr', name: 'French' }, { code: 'ja', name: 'Japanese' },
+  { code: 'pt', name: 'Portuguese' }, { code: 'tr', name: 'Turkish' },
+  { code: 'fa', name: 'Persian' }, { code: 'zh', name: 'Chinese' },
+  { code: 'th', name: 'Thai' }
+];
 
 function App() {
+  const { t, i18n } = useTranslation(); 
+  const changeLanguage = (e) => i18n.changeLanguage(e.target.value);
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* Navigation Bar */}
         <nav className="bg-blue-800 text-white shadow-lg">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex space-x-8">
-                <span className="font-bold text-xl tracking-wider">Agentic Platform</span>
-                <div className="flex space-x-4">
-                  {/* <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
-                    Dashboard
-                  </Link> */}
-                  <Link to="/scopes" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
-                    Scopes
-                  </Link>
-                </div>
+          <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
+            <div className="flex items-center space-x-8">
+              <span className="font-bold text-xl tracking-wider">{t('app_name')}</span>
+              <div className="flex space-x-4">
+                {/* <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('dashboard')}</Link> */}
+                <Link to="/scopes" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('scopes')}</Link>
               </div>
+            </div>
+            <div className="flex items-center relative">
+              <span className="absolute left-2 text-gray-300">🌐</span>
+              <select value={i18n.language} onChange={changeLanguage} className="appearance-none bg-blue-900 border border-blue-700 text-white text-sm rounded-lg block pl-8 pr-8 py-2 cursor-pointer hover:bg-blue-700 outline-none">
+                {LANGUAGES.map((lang) => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
+              </select>
             </div>
           </div>
         </nav>
-
-        {/* Main Content Area */}
         <main className="flex-1 max-w-7xl w-full mx-auto p-6">
           <Routes>
             {/* <Route path="/" element={<Dashboard />} /> */}
@@ -41,5 +51,4 @@ function App() {
     </Router>
   );
 }
-
 export default App;

@@ -23,20 +23,20 @@
                 "output_schema": {}
             },
             {
-                "task_id": "25033266-eadd-4751-bf6c-b17efdc924c7",
-                "task_type": "VISUALIZE",
-                "depends_on_task_id": "55480102-b53a-41ec-8377-76e397446df5",
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
                 "task_id": "68ab8adb-ac96-4219-99dc-0cdb0c0d8431",
                 "task_type": "SEARCH",
                 "depends_on_task_id": null,
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_data.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "25033266-eadd-4751-bf6c-b17efdc924c7",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "55480102-b53a-41ec-8377-76e397446df5",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
                 "input_schema": {},
                 "output_schema": {}
             }

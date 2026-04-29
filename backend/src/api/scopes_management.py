@@ -373,9 +373,9 @@ async def upload_tool(
 async def get_tools():
     """ดึงรายชื่อ Tools ทั้งหมดที่มีในระบบ"""
     conn = await asyncpg.connect(POSTGRES_DSN)
-    rows = await conn.fetch("SELECT id, name, language FROM tools ORDER BY created_at DESC")
+    rows = await conn.fetch("SELECT id, name, language, author_type FROM tools ORDER BY created_at DESC")
     await conn.close()
-    return {"status": "success", "data": [{"id": str(r['id']), "name": r['name'], "language": r['language']} for r in rows]}
+    return {"status": "success", "data": [{"id": str(r['id']), "name": r['name'], "language": r['language'], "author_type": r['author_type']} for r in rows]}
 
 @router.get("/scopes/{scope_id}/schedules")
 async def get_schedules_by_scope(scope_id: str):
@@ -565,29 +565,17 @@ async def get_schedule_insights(schedule_id: str):
 @router.put("/tools/{tool_id}")
 async def update_tool(tool_id: str, updates: ToolUpdate):
     update_data = updates.dict(exclude_unset=True)
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    
     set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(update_data.keys())])
-    values = list(update_data.values())
-    
     conn = await asyncpg.connect(POSTGRES_DSN)
     query = f"UPDATE tools SET {set_clause} WHERE id = $1::uuid RETURNING id"
-    updated_id = await conn.fetchval(query, tool_id, *values)
+    updated_id = await conn.fetchval(query, tool_id, *list(update_data.values()))
     await conn.close()
-    
-    if not updated_id:
-        raise HTTPException(status_code=404, detail="Tool not found")
-    return {"status": "success", "message": "Tool metadata updated"}
+    return {"status": "success"}
 
 @router.delete("/tools/{tool_id}")
 async def delete_tool(tool_id: str):
     conn = await asyncpg.connect(POSTGRES_DSN)
-    # หมายเหตุ: ในระบบจริงอาจต้องไปลบไฟล์ใน MinIO ด้วย
     query = "DELETE FROM tools WHERE id = $1::uuid RETURNING id"
-    deleted_id = await conn.fetchval(query, tool_id)
+    await conn.fetchval(query, tool_id)
     await conn.close()
-    
-    if not deleted_id:
-        raise HTTPException(status_code=404, detail="Tool not found")
-    return {"status": "success", "message": "Tool deleted"}
+    return {"status": "success"}

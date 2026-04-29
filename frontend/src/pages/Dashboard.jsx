@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { dataAPI } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 export default function Dashboard() {
+    const { t } = useTranslation();
     const [insights, setInsights] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchInsights = async () => {
             try {
-                // ค้นหาข้อมูลผลลัพธ์ขั้นสุดท้าย (Stage 4) จาก MongoDB[cite: 4]
                 const response = await dataAPI.searchInsights({
                     stage: "4_VISUALIZE",
                     limit: 10
@@ -25,10 +26,10 @@ export default function Dashboard() {
 
     return (
         <div className="p-8">
-            <h1 className="text-3xl font-bold mb-6 text-gray-800">📈 AI Insights Dashboard</h1>
+            <h1 className="text-3xl font-bold mb-6 text-gray-800">📈 {t('ai_insights_dashboard')}</h1>
             
             {loading ? (
-                <p>กำลังโหลดข้อมูล...</p>
+                <p>{t('loading_data')}</p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {insights.map((insight) => (
@@ -39,12 +40,12 @@ export default function Dashboard() {
                                     insight.insight_type === 'Bullish' ? 'bg-green-100 text-green-800' : 
                                     insight.insight_type === 'Bearish' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
                                 }`}>
-                                    Confidence: {(insight.confidence_score * 100).toFixed(0)}%
+                                    {t('confidence')}: {(insight.confidence_score * 100).toFixed(0)}%
                                 </span>
                             </div>
                             <p className="text-gray-600 mb-4">{insight.summary_text || insight.content}</p>
                             <div className="text-sm text-gray-400">
-                                วิเคราะห์เมื่อ: {new Date(insight.created_at).toLocaleString('th-TH')}
+                                {t('analyzed_at')}: {new Date(insight.created_at).toLocaleString()}
                             </div>
                         </div>
                     ))}
