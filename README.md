@@ -8,7 +8,7 @@ Here is a revised and expanded **"About the project"** section for your `README.
 
 **Agentic Platform for Search and Analyze Data** is a highly scalable, hybrid data orchestration platform designed to seamlessly integrate data ingestion, distributed processing, traditional algorithmic logic, and AI-driven inference. 
 
-By bridging the gap between scheduled batch processing (via Apache Airflow and Spark) and low-latency event-driven streaming (via RabbitMQ/Kafka), this platform empowers users and Autonomous AI Agents to build complex, cross-triggered workflows. The system collects, cleans, and analyzes disparate data sources to generate actionable intelligence, predictive insights, and real-time visualizations.
+By bridging the gap between scheduled batch processing (via Apache Airflow and Spark) and low-latency event-driven streaming (via RabbitMQ), this platform empowers users and Autonomous AI Agents to build complex, cross-triggered workflows. The system collects, cleans, and analyzes disparate data sources to generate actionable intelligence, predictive insights, and real-time visualizations.
 
 While initially conceptualized for financial analysis, the platform's modular tool-calling architecture makes it highly adaptable to virtually any data-heavy domain. 
 
