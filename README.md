@@ -513,3 +513,117 @@ Agentic_Platform_for_Search_and_Analyze_Data
 
 42 directories, 57 files
 ```
+
+
+# 🚀 Comprehensive Guide: Agentic Platform for Search & Analyze Data
+
+This manual covers everything from spinning up the infrastructure and developing your tool scripts to navigating the React-based frontend application.
+
+## 1. Preparation and Deployment (Infrastructure)
+
+The architecture consists of 14 interconnected services managed via Docker Compose. Follow these steps to bring the entire platform online:
+
+**Deployment Steps:**
+1. **Create the Shared Network:** The system relies on an external Docker network to allow seamless communication between containers. Run this first:
+   ```bash
+   docker network create agentic_network
+   ```
+2. **Launch Docker Compose:** Build and start the services in detached mode:<br>
+  Go to root of this project and run this command.
+   ```bash
+   docker-compose -f infrastructure/docker-compose.yml up --build
+   ```
+3. **Verify Service Status:** Once the containers are up, you can access the core services at the following local addresses:
+   * **MinIO (Data Lake):** `http://localhost:9001` (Username: `admin` / Password: `password123`)
+   * **Apache Airflow (Orchestrator):** `http://localhost:8080` (Username: `admin` / Password: `admin`)
+   * **RabbitMQ (Message Broker):** `http://localhost:15672`
+   * **Frontend Web Application:** `http://localhost:5173`
+
+---
+
+## 2. Tool Script Development & Upload Guide
+
+The system executes custom code (Python, Go, C++) across Distributed Worker Nodes. To maximize efficiency and save system resources, it is highly recommended to write **Specific Manual Tool-Calling scripts** tailored for the exact task, rather than implementing heavy, standardized AI Tool protocols.
+
+**Basic Tool Script Requirements:**
+Every script deployed to the system (whether Traditional Logic or AI Inference) must accept three core arguments to track data lineage via the Uniform Data Tracking Protocol (UDTP): `--scope_id`, `--schedule_id`, and `--task_id`.
+
+**Example Python Script (Using `UDTPDataManager`):**
+```python
+import argparse
+from udtp_data_manager import UDTPDataManager
+
+def process_data(scope_id, schedule_id, task_id, custom_arg):
+    # 1. Fetch data from an external API or perform calculations
+    data = {"result": "success", "value": custom_arg}
+    
+    # 2. Save data back to the Data Lake & DB via UDTP
+    manager = UDTPDataManager()
+    manager.save_data(
+        data=data,
+        stage="3_ANALYZE",
+        scope_id=scope_id,
+        schedule_id=schedule_id,
+        task_id=task_id,
+        tags=["analysis", "custom_tool"]
+    )
+    print("Process Completed Successfully")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--scope_id", required=True)
+    parser.add_argument("--schedule_id", required=True)
+    parser.add_argument("--task_id", required=True)
+    # Define any custom arguments your script needs
+    parser.add_argument("--custom_arg", default="default_value")
+    args = parser.parse_args()
+    
+    process_data(args.scope_id, args.schedule_id, args.task_id, args.custom_arg)
+```
+
+**Uploading Tools to the System:**
+You can upload scripts directly through the UI in the **Pipeline Builder**. Click the **"+ Upload New Tool"** button, enter a display name, select the language (Python/Go/C++), and attach your file. The backend will automatically upload it to the `ai-tool-scripts` MinIO bucket and register its metadata in PostgreSQL.
+
+---
+
+## 3. Web Application User Manual
+
+Navigate to `http://localhost:5173` to access the application. The system is divided into three main operational hierarchies:
+
+### 3.1 Scope Management (Project Level)
+A "Scope" represents a high-level business objective (e.g., "Real-time Gold Price Monitoring & Sentiment Analysis").
+* Navigate to the **Scopes** menu.
+* Click **"+ Create New Scope"**.
+* Provide a Name, Description, and Goal.
+* **Select Schedule Mode:** * `MANUAL`: You will manually design the task pipeline.
+  * `AI_AGENT`: The AI will autonomously generate scripts and schedule the pipeline for you.
+
+### 3.2 Schedule Management (Execution Level)
+Inside a Scope, you can create multiple Schedules (e.g., one for daily batch news scraping, another for second-by-second streaming price checks).
+* Click **"+ Add Schedule"**.
+* **Select Execution Type:**
+  * `CRON`: For batch processing. You can select standard times or write a custom CRON expression (e.g., `0 8 * * *`). The backend will automatically sync this with Airflow.
+  * `CONTINUOUS`: For long-running Streaming Workers connected to RabbitMQ/Kafka.
+  * `ONCE`: Executes the pipeline a single time.
+* The Schedule cards on this page will dynamically display the latest AI Insights and execution results.
+
+### 3.3 Interactive Pipeline Builder (Task Graph)
+This is the core workspace where you visually map out data workflows.
+* On a Schedule card, click **"⚙️ Manage Tasks"**.
+* Click **"+ Add New Task"** in the top right. A new node will appear on the canvas.
+* **Drag and Drop:** Position the node wherever you like. The UI automatically saves the X, Y coordinates to the database.
+* **Connect Dependencies:** Drag an arrow from one node's handle to another to define the execution order (e.g., `SEARCH` → `ETL`).
+* **Configure Tasks:** Double-click any node to open the configuration modal:
+  * **Task Type:** Classify the operation (`SEARCH`, `ETL`, `TRADITIONAL_LOGIC`, `AI_INFERENCE`, `VISUALIZE`).
+  * **Engine Type:** Choose where it runs (`AIRFLOW_DAG` for batch, `STREAMING_WORKER` for real-time).
+  * **Tool Script:** Select from your uploaded scripts.
+  * **Arguments (JSON):** Pass dynamic configurations to your script (e.g., `{"ticker": "AAPL", "timeframe": "1D"}`).
+
+### 3.4 AI Insights Dashboard
+When a pipeline completes the `VISUALIZE` stage, the generated JSON blocks are automatically rendered into a visually rich dashboard.
+* **Charts & Graphs:** Powered by Recharts (Line, Bar, Area) for historical trends.
+* **Metrics:** Quick-glance numbers with "Bullish/Bearish" trend indicators.
+* **Tables:** Deep-dive data structures.
+* **Markdown:** Fully formatted text summaries and actionable insights generated by your AI models.
+
+The dashboard auto-updates based on the latest pipeline execution, ensuring you always have a real-time pulse on your data.
