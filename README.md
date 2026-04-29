@@ -1,7 +1,5 @@
 # Agentic Platform for Search Analyze Data (Test version)
 
-Here is a revised and expanded **"About the project"** section for your `README.md`. This version highlights the platform's versatility, showing that its hybrid architecture (Batch + Streaming + AI Sandbox) can handle a wide spectrum of use cases beyond just financial data.
-
 ***
 
 ## About the Project
