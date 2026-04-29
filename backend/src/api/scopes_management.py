@@ -91,6 +91,11 @@ class TaskUpdate(BaseModel):
     engine_type: Optional[str] = None
     arguments: Optional[Dict[str, Any]] = None
 
+class ToolUpdate(BaseModel):
+    name: Optional[str] = None
+    language: Optional[str] = None
+    author_type: Optional[str] = None
+
 # ==========================================
 # Core Logic: Export JSON for Airflow
 # ==========================================
@@ -556,3 +561,33 @@ async def get_schedule_insights(schedule_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.put("/tools/{tool_id}")
+async def update_tool(tool_id: str, updates: ToolUpdate):
+    update_data = updates.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    set_clause = ", ".join([f"{k} = ${i+2}" for i, k in enumerate(update_data.keys())])
+    values = list(update_data.values())
+    
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = f"UPDATE tools SET {set_clause} WHERE id = $1::uuid RETURNING id"
+    updated_id = await conn.fetchval(query, tool_id, *values)
+    await conn.close()
+    
+    if not updated_id:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    return {"status": "success", "message": "Tool metadata updated"}
+
+@router.delete("/tools/{tool_id}")
+async def delete_tool(tool_id: str):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    # หมายเหตุ: ในระบบจริงอาจต้องไปลบไฟล์ใน MinIO ด้วย
+    query = "DELETE FROM tools WHERE id = $1::uuid RETURNING id"
+    deleted_id = await conn.fetchval(query, tool_id)
+    await conn.close()
+    
+    if not deleted_id:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    return {"status": "success", "message": "Tool deleted"}

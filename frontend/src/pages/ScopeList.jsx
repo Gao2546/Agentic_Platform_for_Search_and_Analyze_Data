@@ -1,186 +1,272 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectAPI } from '../services/api';
 
 export default function ScopeList() {
     const navigate = useNavigate();
+    
+    // --- States ---
+    const [activeTab, setActiveTab] = useState('scopes'); // 'scopes' or 'tools'
     const [scopes, setScopes] = useState([]);
+    const [tools, setTools] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Search States
+    const [scopeSearch, setScopeSearch] = useState('');
+    const [toolSearch, setToolSearch] = useState('');
+
+    // Modal States (Common for both Scope and Tool)
+    const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
+    const [isToolModalOpen, setIsToolModalOpen] = useState(false);
     
-    // Modal State
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingScope, setEditingScope] = useState(null);
+    const [editingTool, setEditingTool] = useState(null);
+
+    // Form States
+    const [scopeFormData, setScopeFormData] = useState({ 
+        name: '', description: '', goal: '', schedule_mode: 'MANUAL', status: 'ACTIVE' 
+    });
     
-    // อ้างอิงตาม DB Columns: name, description, goal, schedule_mode, status
-    const [formData, setFormData] = useState({ 
-        name: '', 
-        description: '', 
-        goal: '', 
-        schedule_mode: 'MANUAL',
-        status: 'ACTIVE'
+    const [toolFile, setToolFile] = useState(null);
+    const [toolFormData, setToolFormData] = useState({
+        name: '', language: 'Python', author_type: 'HUMAN'
     });
 
-    useEffect(() => { loadScopes(); }, []);
+    useEffect(() => { 
+        loadInitialData(); 
+    }, []);
 
-    const loadScopes = async () => {
+    const loadInitialData = async () => {
+        setLoading(true);
         try {
-            const res = await projectAPI.getScopes();
-            setScopes(res.data.data || []);
-        } catch (error) { console.error("Failed to fetch scopes", error); }
+            const [scopeRes, toolRes] = await Promise.all([
+                projectAPI.getScopes(),
+                projectAPI.getTools()
+            ]);
+            setScopes(scopeRes.data.data || []);
+            setTools(toolRes.data.data || []);
+        } catch (error) {
+            console.error("Failed to fetch data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const openModal = (e, scope = null) => {
-        if (e) e.stopPropagation(); 
-        
+    // --- Filter Logic ---
+    const filteredScopes = useMemo(() => {
+        return scopes.filter(s => s.name.toLowerCase().includes(scopeSearch.toLowerCase()));
+    }, [scopes, scopeSearch]);
+
+    const filteredTools = useMemo(() => {
+        return tools.filter(t => t.name.toLowerCase().includes(toolSearch.toLowerCase()));
+    }, [tools, toolSearch]);
+
+    // --- Scope Handlers ---
+    const openScopeModal = (scope = null) => {
         if (scope) {
             setEditingScope(scope);
-            setFormData({ 
-                name: scope.name || '', 
-                description: scope.description || '', 
-                goal: scope.goal || '', 
-                schedule_mode: scope.schedule_mode || 'MANUAL',
-                status: scope.status || 'ACTIVE'
-            });
+            setScopeFormData({ ...scope });
         } else {
             setEditingScope(null);
-            setFormData({ name: '', description: '', goal: '', schedule_mode: 'MANUAL', status: 'ACTIVE' });
+            setScopeFormData({ name: '', description: '', goal: '', schedule_mode: 'MANUAL', status: 'ACTIVE' });
         }
-        setIsModalOpen(true);
+        setIsScopeModalOpen(true);
     };
 
-    const handleSubmit = async (e) => {
+    const handleScopeSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (editingScope) {
-                await projectAPI.updateScope(editingScope.id, formData);
-            } else {
-                await projectAPI.createScope({ user_id: "00000000-0000-0000-0000-000000000000", ...formData });
-            }
-            setIsModalOpen(false);
-            loadScopes();
-        } catch (error) { alert(`Error: ${error.message}`); }
+            if (editingScope) await projectAPI.updateScope(editingScope.id, scopeFormData);
+            else await projectAPI.createScope({ user_id: "00000000-0000-0000-0000-000000000000", ...scopeFormData });
+            setIsScopeModalOpen(false);
+            loadInitialData();
+        } catch (error) { alert(error.message); }
     };
 
-    const handleDeleteScope = async () => {
-        if (!editingScope) return;
-        const confirmDelete = window.confirm(`คุณแน่ใจหรือไม่ที่จะลบ Scope "${editingScope.name}"?\n(ข้อมูล Schedule และ Task ทั้งหมดในนี้จะถูกลบทิ้งถาวร)`);
-        if (!confirmDelete) return;
+    // --- Tool Handlers ---
+    const openToolModal = (tool = null) => {
+        if (tool) {
+            setEditingTool(tool);
+            setToolFormData({ name: tool.name, language: tool.language, author_type: tool.author_type });
+        } else {
+            setEditingTool(null);
+            setToolFile(null);
+            setToolFormData({ name: '', language: 'Python', author_type: 'HUMAN' });
+        }
+        setIsToolModalOpen(true);
+    };
 
+    const handleToolSubmit = async (e) => {
+        e.preventDefault();
         try {
-            await projectAPI.deleteScope(editingScope.id);
-            setIsModalOpen(false);
-            loadScopes();
-        } catch (error) { alert(`Error: ${error.message}`); }
+            if (editingTool) {
+                await projectAPI.updateTool(editingTool.id, toolFormData);
+            } else {
+                if (!toolFile) return alert("กรุณาเลือกไฟล์");
+                const fd = new FormData();
+                fd.append('name', toolFormData.name);
+                fd.append('language', toolFormData.language);
+                fd.append('author_type', toolFormData.author_type);
+                fd.append('file', toolFile);
+                await projectAPI.uploadTool(fd);
+            }
+            setIsToolModalOpen(false);
+            loadInitialData();
+        } catch (error) { alert(error.message); }
     };
+
+    const handleDeleteTool = async (id) => {
+        if (window.confirm("ต้องการลบ Tool นี้ใช่หรือไม่?")) {
+            try {
+                await projectAPI.deleteTool(id);
+                loadInitialData();
+            } catch (error) { alert("ลบไม่สำเร็จ"); }
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500 font-bold">กำลังโหลด...</div>;
 
     return (
-        <div className="space-y-6 relative">
-            <div className="flex justify-between items-center border-b pb-4">
-                <h1 className="text-3xl font-bold text-gray-800">📂 My Scopes</h1>
+        <div className="space-y-6">
+            {/* Header & Tabs */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4">
+                <div className="flex space-x-6">
+                    <button 
+                        onClick={() => setActiveTab('scopes')}
+                        className={`text-2xl font-bold transition-colors ${activeTab === 'scopes' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        📂 My Scopes
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('tools')}
+                        className={`text-2xl font-bold transition-colors ${activeTab === 'tools' ? 'text-indigo-600 border-b-4 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        🛠 Tools Library
+                    </button>
+                </div>
+                
                 <button 
-                    onClick={(e) => openModal(e)} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow transition"
+                    onClick={() => activeTab === 'scopes' ? openScopeModal() : openToolModal()}
+                    className={`font-bold py-2 px-6 rounded-lg shadow transition text-white ${activeTab === 'scopes' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                 >
-                    + สร้าง Scope ใหม่
+                    + {activeTab === 'scopes' ? 'สร้าง Scope ใหม่' : 'อัปโหลด Tool ใหม่'}
                 </button>
             </div>
 
-            {/* Scope Cards List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {scopes.map(scope => (
-                    <div 
-                        key={scope.id} 
-                        onClick={() => navigate(`/scopes/${scope.id}`)}
-                        className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-200 p-6 cursor-pointer transition flex flex-col justify-between h-48"
-                    >
-                        {/* เนื้อหา Card (เหมือนเดิม) */}
-                         <div>
-                            <div className="flex justify-between items-start mb-2">
-                                <h2 className="text-xl font-bold text-gray-800 line-clamp-1">{scope.name}</h2>
-                                <span className={`text-xs px-2 py-1 rounded-full font-bold ${scope.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                    {scope.status || 'ACTIVE'}
-                                </span>
-                            </div>
-                            <p className="text-gray-500 text-sm line-clamp-2">{scope.description || "ไม่มีคำอธิบาย"}</p>
-                            <div className="mt-2 text-xs font-semibold text-blue-600 bg-blue-50 w-max px-2 py-1 rounded">
-                                Mode: {scope.schedule_mode || 'MANUAL'}
-                            </div>
-                        </div>
-                        <div className="flex justify-end mt-4 border-t pt-3">
-                            <button 
-                                onClick={(e) => openModal(e, scope)} 
-                                className="text-sm text-gray-600 hover:text-blue-600 font-medium px-3 py-1 bg-gray-100 hover:bg-blue-50 rounded transition"
+            {/* --- Scopes Content --- */}
+            {activeTab === 'scopes' && (
+                <div className="space-y-4">
+                    <input 
+                        type="text" 
+                        placeholder="🔍 ค้นหา Scope..." 
+                        className="w-full max-w-md border p-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-400"
+                        value={scopeSearch}
+                        onChange={e => setScopeSearch(e.target.value)}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredScopes.map(scope => (
+                            <div 
+                                key={scope.id} 
+                                onClick={() => navigate(`/scopes/${scope.id}`)}
+                                className="bg-white rounded-xl shadow-sm hover:shadow-md border p-6 cursor-pointer transition flex flex-col justify-between h-48"
                             >
-                                ✎ แก้ไข
-                            </button>
-                        </div>
+                                <div>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h2 className="text-xl font-bold text-gray-800 line-clamp-1">{scope.name}</h2>
+                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${scope.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{scope.status}</span>
+                                    </div>
+                                    <p className="text-gray-500 text-sm line-clamp-2">{scope.description || "ไม่มีคำอธิบาย"}</p>
+                                </div>
+                                <div className="flex justify-end mt-4 border-t pt-3">
+                                    <button onClick={(e) => { e.stopPropagation(); openScopeModal(scope); }} className="text-sm text-blue-600 font-bold px-3 py-1 bg-blue-50 rounded hover:bg-blue-100">✎ แก้ไข</button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
 
-            {/* Modal Form */}
-            {isModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold text-gray-800">{editingScope ? 'แก้ไข Scope' : 'สร้าง Scope ใหม่'}</h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-red-500 text-xl font-bold">&times;</button>
-                        </div>
-                        
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                           {/* ฟอร์ม input (เหมือนเดิม) */}
-                           <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">ชื่อ Scope</label>
-                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
-                                    value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">รายละเอียด (Description)</label>
-                                <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
-                                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows="2" />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">เป้าหมาย (Goal)</label>
-                                <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
-                                    value={formData.goal} onChange={e => setFormData({...formData, goal: e.target.value})} rows="2" placeholder="เช่น ดึงข่าวย้อนหลัง 1 ปีมาวิเคราะห์" />
-                            </div>
+            {/* --- Tools Content --- */}
+            {activeTab === 'tools' && (
+                <div className="space-y-4">
+                    <input 
+                        type="text" 
+                        placeholder="🔍 ค้นหา Tool (เช่น Python, RSI...)" 
+                        className="w-full max-w-md border p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400"
+                        value={toolSearch}
+                        onChange={e => setToolSearch(e.target.value)}
+                    />
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 border-b">
+                                <tr>
+                                    <th className="p-4 font-bold text-gray-600">ชื่อ Tool</th>
+                                    <th className="p-4 font-bold text-gray-600">ภาษา</th>
+                                    <th className="p-4 font-bold text-gray-600">ประเภท</th>
+                                    <th className="p-4 text-right font-bold text-gray-600">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredTools.map(tool => (
+                                    <tr key={tool.id} className="border-b hover:bg-gray-50 transition">
+                                        <td className="p-4 font-medium text-gray-800">{tool.name}</td>
+                                        <td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold">{tool.language}</span></td>
+                                        <td className="p-4 text-sm text-gray-500">{tool.author_type}</td>
+                                        <td className="p-4 text-right space-x-2">
+                                            <button onClick={() => openToolModal(tool)} className="text-blue-600 hover:underline font-bold text-sm">✎ แก้ไข</button>
+                                            <button onClick={() => handleDeleteTool(tool.id)} className="text-red-500 hover:underline font-bold text-sm">🗑️ ลบ</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {filteredTools.length === 0 && <div className="p-8 text-center text-gray-400">ไม่พบ Tool ที่คุณค้นหา</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* --- Modals --- */}
+            {/* Tool Modal (Upload/Edit) */}
+            {isToolModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border-t-4 border-indigo-500">
+                        <h2 className="text-xl font-bold mb-4">{editingTool ? '📝 แก้ไขข้อมูล Tool' : '📤 อัปโหลด Tool ใหม่'}</h2>
+                        <form onSubmit={handleToolSubmit} className="space-y-4">
+                            <input type="text" placeholder="ชื่อ Tool" className="w-full border p-2 rounded outline-none focus:ring-2 focus:ring-indigo-500" value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} required />
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">Schedule Mode</label>
-                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.schedule_mode} onChange={e => setFormData({...formData, schedule_mode: e.target.value})}>
-                                        <option value="MANUAL">MANUAL (จัดการเอง)</option>
-                                        <option value="AI_AGENT">AI AGENT (AI จัดการให้)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">สถานะ (Status)</label>
-                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                                        <option value="ACTIVE">ACTIVE</option>
-                                        <option value="PAUSED">PAUSED</option>
-                                    </select>
-                                </div>
+                                <select className="border p-2 rounded" value={toolFormData.language} onChange={e => setToolFormData({...toolFormData, language: e.target.value})}>
+                                    <option value="Python">Python</option>
+                                    <option value="Go">Go</option>
+                                    <option value="C++">C++</option>
+                                </select>
+                                <select className="border p-2 rounded" value={toolFormData.author_type} onChange={e => setToolFormData({...toolFormData, author_type: e.target.value})}>
+                                    <option value="HUMAN">HUMAN</option>
+                                    <option value="AI_GENERATED">AI_GENERATED</option>
+                                </select>
                             </div>
-                            
-                            <div className="flex justify-between items-center pt-4 border-t mt-4">
-                                {editingScope ? (
-                                    <button type="button" onClick={handleDeleteScope} className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 font-bold rounded transition">
-                                        🗑️ ลบ Scope
-                                    </button>
-                                ) : <div />} {/* เว้นว่างไว้จัดเลย์เอาต์ตอนสร้างใหม่ */}
-                                
-                                <div className="space-x-3">
-                                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">ยกเลิก</button>
-                                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">บันทึก</button>
-                                </div>
+                            {!editingTool && (
+                                <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50" onChange={e => setToolFile(e.target.files[0])} required />
+                            )}
+                            <div className="flex justify-end space-x-3 pt-4 border-t">
+                                <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-500">ยกเลิก</button>
+                                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">บันทึก</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Scope Modal (โค้ดเดิมของคุณเก้า) */}
+            {isScopeModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+                        <h2 className="text-xl font-bold mb-4">{editingScope ? 'แก้ไข Scope' : 'สร้าง Scope ใหม่'}</h2>
+                        <form onSubmit={handleScopeSubmit} className="space-y-4">
+                            <input type="text" placeholder="ชื่อ Scope" className="w-full border p-2 rounded" value={scopeFormData.name} onChange={e => setScopeFormData({...scopeFormData, name: e.target.value})} required />
+                            <textarea placeholder="รายละเอียด" className="w-full border p-2 rounded" value={scopeFormData.description} onChange={e => setScopeFormData({...scopeFormData, description: e.target.value})} />
+                            <div className="flex justify-end space-x-3 pt-4 border-t">
+                                <button type="button" onClick={() => setIsScopeModalOpen(false)} className="px-4 py-2 text-gray-500">ยกเลิก</button>
+                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-bold">บันทึก</button>
                             </div>
                         </form>
                     </div>

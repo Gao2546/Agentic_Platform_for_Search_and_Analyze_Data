@@ -16,7 +16,9 @@ export default function ScheduleFlow() {
     const [edges, setEdges] = useState([]);
     const [tools, setTools] = useState([]); 
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('pipeline'); 
 
+    // --- Task Configuration State ---
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
     const [taskFormData, setTaskFormData] = useState({
@@ -26,8 +28,9 @@ export default function ScheduleFlow() {
         arguments: '{\n  \n}'
     });
 
-    // 🚀 NEW: State สำหรับ Tool Upload Modal
+    // --- Tool Management State ---
     const [isToolModalOpen, setIsToolModalOpen] = useState(false);
+    const [editingTool, setEditingTool] = useState(null);
     const [toolFile, setToolFile] = useState(null);
     const [toolFormData, setToolFormData] = useState({
         name: '',
@@ -36,7 +39,6 @@ export default function ScheduleFlow() {
     });
 
     const [insightsBlocks, setInsightsBlocks] = useState([]);
-    const [activeTab, setActiveTab] = useState('pipeline'); 
 
     useEffect(() => { 
         loadFlowData(); 
@@ -53,13 +55,6 @@ export default function ScheduleFlow() {
 
     const loadInsightsData = async () => {
         try {
-            // setTimeout(() => {
-            //     setInsightsBlocks([
-            //         { id: "b1", type: "metric", colSpan: 4, label: "RSI (14 Days)", value: "72.5", trend: "up", color: "red" },
-            //         { id: "b2", type: "metric", colSpan: 4, label: "Market Sentiment", value: "Bullish", trend: "up", color: "green" },
-            //         { id: "b3", type: "metric", colSpan: 4, label: "Execution Status", value: "Success", trend: "up", color: "blue" }
-            //     ]);
-            // }, 800);
             const res = await projectAPI.getScheduleInsights(scheduleId);
             setInsightsBlocks(res.data.data || []);
         } catch (error) { console.error("Failed to load insights", error); }
@@ -82,7 +77,6 @@ export default function ScheduleFlow() {
                     ),
                     originalData: task 
                 },
-                arguments: task.arguments,
                 type: 'default',
                 style: {
                     background: '#fff', border: '2px solid #6366f1', borderRadius: '8px', padding: '10px', width: 160, textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -115,9 +109,10 @@ export default function ScheduleFlow() {
         catch (error) { console.error("Failed to save dependency", error); }
     };
 
+    // --- Task Actions ---
     const handleAddNewTask = () => {
         setEditingTask(null);
-        setTaskFormData({ task_type: 'SEARCH', tool_id: tools[0]?.id || '', engine_type: 'AIRFLOW_DAG', arguments: '{\n  \n}' });
+        setTaskFormData({ task_type: 'SEARCH', tool_id: '', engine_type: 'AIRFLOW_DAG', arguments: '{\n  \n}' });
         setIsTaskModalOpen(true);
     };
 
@@ -125,7 +120,7 @@ export default function ScheduleFlow() {
         const task = node.data.originalData;
         setEditingTask(task);
         setTaskFormData({
-            task_type: task.task_type || 'SEARCH', tool_id: task.tool_id || tools[0]?.id || '',
+            task_type: task.task_type || 'SEARCH', tool_id: task.tool_id || '',
             engine_type: task.engine_type || 'AIRFLOW_DAG', arguments: task.arguments ? JSON.stringify(task.arguments, null, 2) : '{\n  \n}'
         });
         setIsTaskModalOpen(true);
@@ -152,32 +147,56 @@ export default function ScheduleFlow() {
         catch (error) { alert(`Error: ${error.message}`); }
     };
 
-    // 🚀 NEW: ฟังก์ชันส่งไฟล์ Tool ไปให้ Backend
-    const handleUploadToolSubmit = async (e) => {
+    // --- Tool Actions ---
+    const openAddToolModal = () => {
+        setEditingTool(null);
+        setToolFile(null);
+        setToolFormData({ name: '', language: 'Python', author_type: 'HUMAN' });
+        setIsToolModalOpen(true);
+    };
+
+    const openEditToolModal = () => {
+        const toolToEdit = tools.find(t => t.id === taskFormData.tool_id);
+        if (!toolToEdit) return;
+        setEditingTool(toolToEdit);
+        setToolFormData({
+            name: toolToEdit.name,
+            language: toolToEdit.language,
+            author_type: toolToEdit.author_type
+        });
+        setIsToolModalOpen(true);
+    };
+
+    const handleToolSubmit = async (e) => {
         e.preventDefault();
-        if (!toolFile) { alert("กรุณาเลือกไฟล์ Tool Script ก่อนอัปโหลด"); return; }
-
-        const formData = new FormData();
-        formData.append('name', toolFormData.name);
-        formData.append('language', toolFormData.language);
-        formData.append('author_type', toolFormData.author_type);
-        formData.append('file', toolFile);
-
         try {
-            const res = await projectAPI.uploadTool(formData);
-            alert("✅ อัปโหลด Tool สำเร็จ!");
-            setIsToolModalOpen(false); // ปิด Modal
-            setToolFile(null); // ล้างไฟล์ที่เลือก
-            setToolFormData({ name: '', language: 'Python', author_type: 'HUMAN' });
-            
-            // โหลดรายการ Tool ใหม่ และเลือก Tool ที่เพิ่งอัปโหลดให้ทันที
-            await loadTools();
-            if (res.data.tool_id) {
-                setTaskFormData(prev => ({ ...prev, tool_id: res.data.tool_id }));
+            if (editingTool) {
+                await projectAPI.updateTool(editingTool.id, toolFormData);
+                alert("✅ แก้ไขข้อมูล Tool สำเร็จ!");
+            } else {
+                if (!toolFile) { alert("กรุณาเลือกไฟล์ Tool Script ก่อนอัปโหลด"); return; }
+                const formData = new FormData();
+                formData.append('name', toolFormData.name);
+                formData.append('language', toolFormData.language);
+                formData.append('author_type', toolFormData.author_type);
+                formData.append('file', toolFile);
+                const res = await projectAPI.uploadTool(formData);
+                alert("✅ อัปโหลด Tool สำเร็จ!");
+                if (res.data.tool_id) setTaskFormData(prev => ({ ...prev, tool_id: res.data.tool_id }));
             }
-        } catch (error) {
-            alert(`อัปโหลดล้มเหลว: ${error.response?.data?.detail || error.message}`);
-        }
+            setIsToolModalOpen(false);
+            loadTools();
+        } catch (error) { alert(`ดำเนินการล้มเหลว: ${error.message}`); }
+    };
+
+    const handleDeleteTool = async (toolId) => {
+        if (!window.confirm("แน่ใจหรือไม่ที่จะลบ Tool นี้? งานที่ใช้ Tool นี้อาจได้รับผลกระทบ")) return;
+        try {
+            await projectAPI.deleteTool(toolId);
+            setIsToolModalOpen(false);
+            loadTools();
+            setTaskFormData(prev => ({ ...prev, tool_id: '' }));
+        } catch (error) { alert("ลบไม่สำเร็จ"); }
     };
 
     if (loading) return <div className="p-8 text-center text-gray-500 font-bold mt-10">กำลังโหลดข้อมูล...</div>;
@@ -212,7 +231,7 @@ export default function ScheduleFlow() {
                 <DynamicWidgetRenderer blocks={insightsBlocks} />
             </div>
 
-            {/* Modal หลัก: Task Configuration */}
+            {/* Modal: Task Configuration */}
             {isTaskModalOpen && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
                     <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
@@ -241,18 +260,30 @@ export default function ScheduleFlow() {
                                 </div>
                             </div>
                             
-                            {/* 🚀 ตรงนี้คือจุดที่เราเพิ่มปุ่ม Upload */}
                             <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <label className="block text-gray-700 text-sm font-bold">Tool Script ที่เรียกใช้</label>
-                                    <button type="button" onClick={() => setIsToolModalOpen(true)} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline">
+                                    <button type="button" onClick={openAddToolModal} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline">
                                         + อัปโหลด Tool ใหม่
                                     </button>
                                 </div>
-                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500" value={taskFormData.tool_id} onChange={e => setTaskFormData({...taskFormData, tool_id: e.target.value})} required>
-                                    <option value="" disabled>-- กรุณาเลือก Tool Script --</option>
-                                    {tools.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
-                                </select>
+                                {/* 🚀 Dropdown พร้อมปุ่มแก้ไขด้านหลัง */}
+                                <div className="flex space-x-2">
+                                    <select className="flex-1 border p-2 rounded focus:ring-2 focus:ring-indigo-500" value={taskFormData.tool_id} onChange={e => setTaskFormData({...taskFormData, tool_id: e.target.value})} required>
+                                        <option value="" disabled>-- เลือก Tool Script --</option>
+                                        {tools.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
+                                    </select>
+                                    {taskFormData.tool_id && (
+                                        <button 
+                                            type="button" 
+                                            onClick={openEditToolModal} 
+                                            className="px-3 py-2 bg-gray-100 text-blue-600 rounded hover:bg-blue-50 border border-gray-300 font-bold transition"
+                                            title="แก้ไข Tool นี้"
+                                        >
+                                            ✎
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div>
@@ -271,23 +302,25 @@ export default function ScheduleFlow() {
                 </div>
             )}
 
-            {/* 🚀 NEW: Modal สำหรับอัปโหลด Tool */}
+            {/* Modal: Tool Management */}
             {isToolModalOpen && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
                     <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border-t-4 border-indigo-500">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">📤 อัปโหลด Tool Script</h2>
+                            <h2 className="text-xl font-bold text-gray-800">
+                                {editingTool ? '📝 แก้ไขข้อมูล Tool' : '📤 อัปโหลด Tool ใหม่'}
+                            </h2>
                             <button onClick={() => setIsToolModalOpen(false)} className="text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
                         </div>
-                        <form onSubmit={handleUploadToolSubmit} className="space-y-4">
+                        <form onSubmit={handleToolSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">ชื่อ Tool (Display Name)</label>
+                                <label className="block text-gray-700 text-sm font-bold mb-1">ชื่อ Tool</label>
                                 <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                    value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} placeholder="เช่น สคริปต์วิเคราะห์ RSI" required />
+                                    value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} required />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">ภาษา (Language)</label>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ภาษา</label>
                                     <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                         value={toolFormData.language} onChange={e => setToolFormData({...toolFormData, language: e.target.value})}>
                                         <option value="Python">Python</option>
@@ -296,7 +329,7 @@ export default function ScheduleFlow() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">ผู้สร้าง (Author)</label>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ผู้สร้าง</label>
                                     <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                                         value={toolFormData.author_type} onChange={e => setToolFormData({...toolFormData, author_type: e.target.value})}>
                                         <option value="HUMAN">HUMAN</option>
@@ -304,14 +337,27 @@ export default function ScheduleFlow() {
                                     </select>
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">ไฟล์ Script (.py, .go)</label>
-                                <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
-                                    onChange={e => setToolFile(e.target.files[0])} required />
-                            </div>
-                            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                                <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">ยกเลิก</button>
-                                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">ยืนยันอัปโหลด</button>
+                            
+                            {!editingTool && (
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">ไฟล์ Script</label>
+                                    <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                                        onChange={e => setToolFile(e.target.files[0])} required />
+                                </div>
+                            )}
+
+                            <div className="flex justify-between items-center pt-4 border-t mt-4">
+                                {editingTool && (
+                                    <button type="button" onClick={() => handleDeleteTool(editingTool.id)} className="text-red-600 font-bold hover:bg-red-50 p-2 rounded transition">
+                                        🗑️ ลบ Tool
+                                    </button>
+                                )}
+                                <div className={`flex space-x-3 ${!editingTool ? 'w-full justify-end' : ''}`}>
+                                    <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">ยกเลิก</button>
+                                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">
+                                        {editingTool ? 'บันทึกการแก้ไข' : 'ยืนยันอัปโหลด'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

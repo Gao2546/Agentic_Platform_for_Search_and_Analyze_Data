@@ -5,18 +5,9 @@
         "cron": "0 8 * * *",
         "tasks": [
             {
-                "task_id": "9490b217-d7c9-452c-bae1-a474135c19da",
-                "task_type": "SEARCH",
-                "depends_on_task_id": null,
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_data.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
                 "task_id": "742eaa44-2b84-47d4-994f-10047e8de373",
                 "task_type": "ETL",
-                "depends_on_task_id": "9490b217-d7c9-452c-bae1-a474135c19da",
+                "depends_on_task_id": "68ab8adb-ac96-4219-99dc-0cdb0c0d8431",
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
                 "input_schema": {},
@@ -39,6 +30,15 @@
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
                 "input_schema": {},
                 "output_schema": {}
+            },
+            {
+                "task_id": "68ab8adb-ac96-4219-99dc-0cdb0c0d8431",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_data.py",
+                "input_schema": {},
+                "output_schema": {}
             }
         ]
     },
@@ -46,46 +46,6 @@
         "schedule_id": "f3b15ce3-5d0c-4b01-8b58-647a6d180919",
         "scope_id": "ec1f22d5-383e-4b44-8254-3c3dfc6ba874",
         "cron": "30 0 * * *",
-        "tasks": [
-            {
-                "task_id": "0ff8f2fc-09b7-43e6-af8d-ae7bc00435e0",
-                "task_type": "SEARCH",
-                "depends_on_task_id": null,
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/external-apis/fetch_data.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "6b760f35-5512-4c42-8b23-f0023cb63da9",
-                "task_type": "ETL",
-                "depends_on_task_id": "0ff8f2fc-09b7-43e6-af8d-ae7bc00435e0",
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "6e1b9e61-ef3f-45cd-91f7-0bd89f3a946f",
-                "task_type": "AI_INFERENCE",
-                "depends_on_task_id": "6b760f35-5512-4c42-8b23-f0023cb63da9",
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/ai-inference/llm_sentiment.go",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "0a4862aa-c3a9-4707-9c32-b599289876ec",
-                "task_type": "VISUALIZE",
-                "depends_on_task_id": "6e1b9e61-ef3f-45cd-91f7-0bd89f3a946f",
-                "arguments": {
-                    "scope_id": "ec1f22d5-383e-4b44-8254-3c3dfc6ba874",
-                    "schedule_id": "f3b15ce3-5d0c-4b01-8b58-647a6d180919"
-                },
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
-                "input_schema": {},
-                "output_schema": {}
-            }
-        ]
+        "tasks": []
     }
 ]
