@@ -5,25 +5,7 @@
         "cron": "0 8 * * *",
         "tasks": [
             {
-                "task_id": "742eaa44-2b84-47d4-994f-10047e8de373",
-                "task_type": "ETL",
-                "depends_on_task_id": "68ab8adb-ac96-4219-99dc-0cdb0c0d8431",
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "55480102-b53a-41ec-8377-76e397446df5",
-                "task_type": "AI_INFERENCE",
-                "depends_on_task_id": "742eaa44-2b84-47d4-994f-10047e8de373",
-                "arguments": {},
-                "script_url": "s3a://ai-tool-scripts/traditional-logic/rule_base_sentiment.py",
-                "input_schema": {},
-                "output_schema": {}
-            },
-            {
-                "task_id": "68ab8adb-ac96-4219-99dc-0cdb0c0d8431",
+                "task_id": "1ab4d485-2c16-4f38-a6dd-f967e245b967",
                 "task_type": "SEARCH",
                 "depends_on_task_id": null,
                 "arguments": {},
@@ -32,9 +14,27 @@
                 "output_schema": {}
             },
             {
-                "task_id": "25033266-eadd-4751-bf6c-b17efdc924c7",
+                "task_id": "29f4470f-8e8a-4bcd-a8cc-52728119050c",
+                "task_type": "ETL",
+                "depends_on_task_id": "1ab4d485-2c16-4f38-a6dd-f967e245b967",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "f3e3c723-b499-4ed3-aa7e-fa75bd61b50e",
+                "task_type": "AI_INFERENCE",
+                "depends_on_task_id": "29f4470f-8e8a-4bcd-a8cc-52728119050c",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/rule_base_sentiment.py",
+                "input_schema": {},
+                "output_schema": {}
+            },
+            {
+                "task_id": "1e4f2597-fa5f-4a73-8587-fe6d9f2c24d3",
                 "task_type": "VISUALIZE",
-                "depends_on_task_id": "55480102-b53a-41ec-8377-76e397446df5",
+                "depends_on_task_id": "f3e3c723-b499-4ed3-aa7e-fa75bd61b50e",
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
                 "input_schema": {},

@@ -437,12 +437,14 @@ Write  `a .yaml file` to deploy the entire system (Airflow, Spark Workers, DBs, 
 ### Current Project Tree
 ```code
 Agentic_Platform_for_Search_and_Analyze_Data
-├── agentic_core
-│   ├── agentic_core
-│   │   ├── __init__.py
-│   │   ├── udtp_mongo.py
-│   │   └── udtp_postgres.py
-│   └── setup.py
+├── utils
+│   ├── setup.py
+│   └── utils
+│       ├── __init__.py
+│       ├── udtp_data_manager.py
+│       ├── UDTP_Library_v2_Standard.md
+│       ├── udtp_mongo.py
+│       └── udtp_postgres.py
 ├── ai-engine
 │   ├── pre-validator
 │   ├── prompts

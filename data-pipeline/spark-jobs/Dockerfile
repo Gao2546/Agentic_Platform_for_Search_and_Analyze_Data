@@ -29,9 +29,9 @@ RUN python3 -m pip install --no-cache-dir \
     boto3 \
     opencv-python
 
-# 1. ก๊อปปี้และติดตั้ง Shared Library (agentic_core)
-COPY agentic_core /app/agentic_core
-RUN pip install -e /app/agentic_core
+# 1. ก๊อปปี้และติดตั้ง Shared Library (utils)
+COPY utils /app/utils
+RUN pip install -e /app/utils
 
 # 5. ดาวน์โหลด JAR files ที่จำเป็น 
 # (หมายเหตุ: Spark 4.0.x ถูกคอมไพล์มาพร้อม Hadoop 3.4.x ดังนั้นใช้ hadoop-aws-3.4.1.jar ตัวนี้ได้เลย ถูกต้องแล้วครับ)

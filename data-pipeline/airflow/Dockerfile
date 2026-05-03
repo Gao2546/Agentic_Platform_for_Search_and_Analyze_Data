@@ -24,16 +24,16 @@ RUN wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.4.1/hadoo
 # Copy the requirements file into the container
 COPY data-pipeline/airflow/requirements.txt /requirements.txt
 
-# 1. ก๊อปปี้และติดตั้ง Shared Library (agentic_core)
-COPY agentic_core /app/agentic_core
+# 1. ก๊อปปี้และติดตั้ง Shared Library (utils)
+COPY utils /app/utils
 
 # 📌 Change ownership to airflow user so it can write the .egg-info folder
 USER root
-RUN chown -R airflow: /app/agentic_core
+RUN chown -R airflow: /app/utils
 
 # Switch back to airflow to perform the install
 USER airflow
-RUN pip install -e /app/agentic_core
+RUN pip install -e /app/utils
 
 # Install the Python libraries before the container runs its main command
 RUN pip install --user --no-cache-dir -r /requirements.txt
