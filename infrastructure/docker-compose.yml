@@ -121,7 +121,7 @@ services:
       # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
       # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
       # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
-      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: api-server
     ports:
       - "8080:8080"
@@ -131,7 +131,7 @@ services:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags
       - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config เข้าไปใน Container เพื่อให้ Webserver อ่านไฟล์ JSON ได้
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
-      - ../agentic_core:/opt/agentic_core
+      - ../utils:/opt/utils
 
   # 7. Airflow Scheduler 
   airflow-scheduler:
@@ -157,7 +157,7 @@ services:
       # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
       # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
       # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
-      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: scheduler
     networks:
       - shared_net
@@ -165,7 +165,7 @@ services:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags
       - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config เข้าไปใน Container เพื่อให้ Scheduler อ่านไฟล์ JSON ได้
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
-      - ../agentic_core:/opt/agentic_core
+      - ../utils:/opt/utils
 
   # 8. Airflow DAG Processor (เพิ่มเข้ามาสำหรับ Airflow 3 โดยเฉพาะ)
   airflow-dag-processor:
@@ -188,7 +188,7 @@ services:
       - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
       - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=30
       # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
-      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/agentic_core:$PYTHONPATH
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: dag-processor
     networks:
       - shared_net
@@ -196,7 +196,7 @@ services:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags
       - ../data-pipeline/airflow/config:/opt/airflow/config
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
-      - ../agentic_core:/opt/agentic_core
+      - ../utils:/opt/utils
 
   # 9. Spark Master (ตัวควบคุม Cluster)
   spark-master:
@@ -205,7 +205,7 @@ services:
       dockerfile: data-pipeline/spark-jobs/Dockerfile
     container_name: agentic_spark_master
     environment:
-      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/agentic_core:$PYTHONPATH
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/utils:$PYTHONPATH
     # 📌 สั่งให้รันเป็น Master Node ด้วยคำสั่งของค่าย Apache โดยตรง
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     ports:
@@ -215,7 +215,7 @@ services:
       - shared_net
     volumes:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
-      - ../agentic_core:/opt/agentic_core
+      - ../utils:/opt/utils
 
   # 10. Spark Worker (โหนดประมวลผล)
   spark-worker:
@@ -224,7 +224,7 @@ services:
       dockerfile: data-pipeline/spark-jobs/Dockerfile
     container_name: agentic_spark_worker
     environment:
-      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/agentic_core:$PYTHONPATH
+      - PYTHONPATH=/opt/airflow/spark-jobs:/opt/utils:$PYTHONPATH
     # 📌 สั่งให้รันเป็น Worker Node และชี้เป้าไปที่ Master
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     networks:
@@ -233,12 +233,12 @@ services:
       - spark-master
     volumes:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
-      - ../agentic_core:/opt/agentic_core
+      - ../utils:/opt/utils
 
   # 11. Backend API Service
   backend-api:
     build:
-      context: ../ # สำคัญมาก: ต้องใช้ Root path เป็น Context เพื่อให้เห็นโฟลเดอร์ agentic_core
+      context: ../ # สำคัญมาก: ต้องใช้ Root path เป็น Context เพื่อให้เห็นโฟลเดอร์ utils
       dockerfile: backend/Dockerfile
     container_name: agentic_backend
     ports:
@@ -253,13 +253,13 @@ services:
       - AIRFLOW_USER=admin
       - AIRFLOW_PASSWORD=admin
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
-      - PYTHONPATH=/app/agentic_core:$PYTHONPATH # เพิ่ม PYTHONPATH ให้ Backend มองเห็นโค้ดในโฟลเดอร์ต่างๆ
+      - PYTHONPATH=/app/utils:$PYTHONPATH # เพิ่ม PYTHONPATH ให้ Backend มองเห็นโค้ดในโฟลเดอร์ต่างๆ
     depends_on:
       - postgres
       - mongodb
       - minio
     volumes:
-      - ../agentic_core:/app/agentic_core # แมปโฟลเดอร์โค้ดหลักให้ Backend มองเห็น
+      - ../utils:/app/utils # แมปโฟลเดอร์โค้ดหลักให้ Backend มองเห็น
       - ../backend/src:/app/backend/src # แมปโฟลเดอร์โค้ด Backend ให้เห็น
       - ../data-pipeline/airflow/dags:/opt/airflow/dags # แมปโฟลเดอร์ DAGs ให้ Backend มองเห็น (สำหรับ Trigger)
       - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config ให้ Backend มองเห็น (สำหรับอ่าน schedules.json)

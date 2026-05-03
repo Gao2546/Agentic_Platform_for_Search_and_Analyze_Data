@@ -4,7 +4,7 @@ import pandas as pd
 import io
 import boto3
 from urllib.parse import urlparse
-from agentic_core.udtp_data_manager import UDTPDataManager
+from utils.udtp_data_manager import UDTPDataManager
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--scope_id', type=str, required=True)

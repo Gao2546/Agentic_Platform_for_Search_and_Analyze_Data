@@ -1,7 +1,7 @@
 import argparse
 import random
 import time
-from agentic_core.udtp_data_manager import UDTPDataManager
+from utils.udtp_data_manager import UDTPDataManager
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--ticker', type=str, default='AAPL')

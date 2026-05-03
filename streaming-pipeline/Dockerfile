@@ -4,9 +4,9 @@ RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/li
 
 WORKDIR /app
 
-# 1. ก๊อปปี้และติดตั้ง Shared Library (agentic_core)
-COPY agentic_core /app/agentic_core
-RUN pip install -e /app/agentic_core
+# 1. ก๊อปปี้และติดตั้ง Shared Library (utils)
+COPY utils /app/utils
+RUN pip install -e /app/utils
 
 # 2. ก๊อปปี้และติดตั้ง Streaming Requirements
 COPY streaming-pipeline/requirements.txt /app/streaming-pipeline/

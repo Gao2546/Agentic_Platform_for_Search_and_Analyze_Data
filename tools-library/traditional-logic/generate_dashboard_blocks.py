@@ -8,7 +8,7 @@ import io
 import boto3
 from urllib.parse import urlparse
 from pymongo import MongoClient
-from agentic_core.udtp_data_manager import UDTPDataManager
+from utils.udtp_data_manager import UDTPDataManager
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--scope_id', type=str, required=True)
