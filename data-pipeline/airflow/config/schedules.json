@@ -1,5 +1,874 @@
 [
     {
+        "schedule_id": "06f241bc-16f8-4ba3-b7d6-84f913400265",
+        "scope_id": "5e7bd6de-dd94-4414-9ffd-80fef373d43a",
+        "cron": "0 11 * * *",
+        "tasks": [
+            {
+                "task_id": "90ab6338-3239-4436-b11e-5fa640e5716e",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {
+                    "ticker": "AAPL"
+                },
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetchpricedata.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "ticker",
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "ticker": {
+                            "type": "string",
+                            "description": "Stock ticker symbol to retrieve data for."
+                        },
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "saved_path": {
+                            "type": "string",
+                            "description": "S3 URI where the raw data was saved."
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "ba5e7191-a043-409a-a1e9-71f4cf18045e",
+                "task_type": "ETL",
+                "depends_on_task_id": "90ab6338-3239-4436-b11e-5fa640e5716e",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/computemacd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "saved_path": {
+                            "type": "string",
+                            "description": "S3 URI where the MACD data was saved."
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "dfb389d6-9233-4193-8be5-efa2909de103",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "ba5e7191-a043-409a-a1e9-71f4cf18045e",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/visualizemacd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id"
+                    ],
+                    "properties": {
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "mongo_inserted_id": {
+                            "type": "string",
+                            "description": "ObjectId of the inserted document in MongoDB."
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "13491af1-a9d8-4a07-9170-36f506282df5",
+        "scope_id": "67036596-a51a-4c18-a7d4-ab3254c83173",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "7f70dada-f949-42fb-9d63-cdab2bcc56a0",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/CollectThailandGeoDemographicData.py",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                },
+                "output_schema": {
+                    "type": "object",
+                    "required": [
+                        "status",
+                        "message"
+                    ],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "Overall status of the collection run"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Human-readable summary"
+                        },
+                        "files_saved": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of S3 paths where data was saved"
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "271a3c70-00e2-458d-8cfa-6d05f375ee23",
+        "scope_id": "b7cc18bd-142b-4601-b924-5d25546d4dfe",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "13979f3c-205f-40f6-b929-57509f0bf056",
+                "task_type": "TRADITIONAL_LOGIC",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/init_news_database_schema.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "enum": [
+                                "success"
+                            ],
+                            "type": "string"
+                        },
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        },
+                        "tables_created_or_verified": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of table names ensured to exist"
+                        },
+                        "indexes_created_or_verified": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of index names ensured to exist"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "psycopg2-binary": "psycopg2-binary>=2.9.0"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "322a4d42-958c-419c-b0dc-6c25fd650112",
+        "scope_id": "67036596-a51a-4c18-a7d4-ab3254c83173",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "b246a198-7239-4298-894f-ef2a1b51a08d",
+                "task_type": "ETL",
+                "depends_on_task_id": null,
+                "arguments": {
+                    "schedule_id": "13491af1-a9d8-4a07-9170-36f506282df5"
+                },
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/process_to_geojson.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {
+                        "data_url": {
+                            "type": "string",
+                            "description": "The tool reads data automatically from 1_RAW stage using scope_id and schedule_id"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "required": [
+                        "GeoJSON FeatureCollection"
+                    ],
+                    "properties": {
+                        "GeoJSON FeatureCollection": {
+                            "type": "object",
+                            "description": "A valid GeoJSON FeatureCollection with all features as Points."
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "3ef317b1-f84c-4004-a488-34c39025eed8",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": null,
+                "arguments": {
+                    "schedule_id": "13491af1-a9d8-4a07-9170-36f506282df5"
+                },
+                "script_url": "s3a://ai-tool-scripts/ai-inference/generate_interactive_map_frontend.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {
+                        "geojson_url": {
+                            "type": "string",
+                            "description": "Automatically reads GeoJSON from 2_ETL stage based on scope/schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "required": [
+                        "HTML file"
+                    ],
+                    "properties": {
+                        "HTML file": {
+                            "type": "string",
+                            "description": "A fully self-contained HTML page with interactive Leaflet map."
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "3c1f2165-66a8-427b-826d-b7e7d48cde53",
+        "scope_id": "c7effa09-f3b9-40b8-ba8f-351a76112f28",
+        "cron": "0 9 * * 1-5",
+        "tasks": [
+            {
+                "task_id": "59a335eb-2e36-4c2d-834d-4c72768ccbce",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetch_intc_price.py",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "records": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "date",
+                                    "open",
+                                    "high",
+                                    "low",
+                                    "close",
+                                    "volume"
+                                ],
+                                "properties": {
+                                    "low": {
+                                        "type": "number"
+                                    },
+                                    "date": {
+                                        "type": "string"
+                                    },
+                                    "high": {
+                                        "type": "number"
+                                    },
+                                    "open": {
+                                        "type": "number"
+                                    },
+                                    "close": {
+                                        "type": "number"
+                                    },
+                                    "volume": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "e7cfc2d6-7ce8-4c35-8eac-202fae279239",
+                "task_type": "ETL",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/compute_macd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "e6a8f4ff-1909-48e5-a0f2-b2d4ac4ff825",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/visualize_macd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "58036288-e759-4190-a5b8-6bdd8676e959",
+        "scope_id": "0e9eb51b-0777-4a2e-9208-72250931443b",
+        "cron": "* * * * *",
+        "tasks": [
+            {
+                "task_id": "45159a3e-455b-4732-9dad-62e8a039aadd",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_amzn_stock.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "f3099a5a-42f5-4c94-bdda-409556ad4824",
+                "task_type": "TRADITIONAL_LOGIC",
+                "depends_on_task_id": "45159a3e-455b-4732-9dad-62e8a039aadd",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/compute_macd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "5d0abf2d-cbaf-4058-865b-fa7ccc397004",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "f3099a5a-42f5-4c94-bdda-409556ad4824",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/visualize_macd.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "607b7e32-e473-458e-96d2-a77c1d1d626d",
+        "scope_id": "b7cc18bd-142b-4601-b924-5d25546d4dfe",
+        "cron": "0 */6 * * *",
+        "tasks": [
+            {
+                "task_id": "829d78ce-a164-45d0-91e7-53af6744ab8b",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetch_us_news_rss.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope/project"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule execution"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "Status message of the operation"
+                        },
+                        "articles_count": {
+                            "type": "integer",
+                            "description": "Number of unique articles fetched"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas",
+                    "requests": "requests",
+                    "feedparser": "feedparser"
+                }
+            },
+            {
+                "task_id": "6097ca7f-e02b-47be-91f1-170538840480",
+                "task_type": "ETL",
+                "depends_on_task_id": "829d78ce-a164-45d0-91e7-53af6744ab8b",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/parse_us_news_to_etl.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string"
+                        },
+                        "processed_count": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas",
+                    "requests": "requests"
+                }
+            },
+            {
+                "task_id": "8332cab1-a09c-4d78-b616-c8ab85473681",
+                "task_type": "AI_INFERENCE",
+                "depends_on_task_id": "6097ca7f-e02b-47be-91f1-170538840480",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/summarize_us_news_to_analyze.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ai_analysis": {
+                            "type": "object"
+                        },
+                        "total_articles": {
+                            "type": "integer"
+                        },
+                        "articles_summary": {
+                            "type": "array"
+                        },
+                        "source_distribution": {
+                            "type": "object"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "openai": "openai",
+                    "pandas": "pandas",
+                    "requests": "requests"
+                }
+            },
+            {
+                "task_id": "cd142e00-a38d-46a3-a820-18df51101a58",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "8332cab1-a09c-4d78-b616-c8ab85473681",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/visualize_us_news_dashboard.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string"
+                        },
+                        "blocks_count": {
+                            "type": "integer"
+                        },
+                        "dashboard_id": {
+                            "type": "string",
+                            "description": "MongoDB document ID"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas",
+                    "pymongo": "pymongo==4.17.0"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "97e7490d-4a65-4549-be58-fc27174c2dce",
+        "scope_id": "eae94b75-1f7e-4f4c-8e0c-ddf7a637756e",
+        "cron": "0 */1 * * *",
+        "tasks": [
+            {
+                "task_id": "bafbfeae-ac3b-4e2b-92ef-8a23e53fb4f2",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/thai_news_fetcher.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "articles": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "guid": {
+                                        "type": "string"
+                                    },
+                                    "link": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "source": {
+                                        "type": "string"
+                                    },
+                                    "summary": {
+                                        "type": "string"
+                                    },
+                                    "published": {
+                                        "type": "string"
+                                    },
+                                    "fetched_at": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "dependencies": {
+                    "lxml": "lxml>=4.9.0",
+                    "requests": "requests>=2.28.0",
+                    "dateparser": "dateparser>=1.1.0",
+                    "beautifulsoup4": "beautifulsoup4>=4.12.0"
+                }
+            },
+            {
+                "task_id": "de4f8a32-d239-407b-8c6e-c8844a4687a5",
+                "task_type": "ETL",
+                "depends_on_task_id": "bafbfeae-ac3b-4e2b-92ef-8a23e53fb4f2",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/thai_news_cleaner.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "articles": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "link": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "source": {
+                                        "type": "string"
+                                    },
+                                    "summary": {
+                                        "type": "string"
+                                    },
+                                    "published": {
+                                        "type": "string"
+                                    },
+                                    "fetched_at": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas>=2.0.0"
+                }
+            },
+            {
+                "task_id": "b39c9e43-0f7d-41cd-86fb-6024187a2052",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "de4f8a32-d239-407b-8c6e-c8844a4687a5",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/thai_news_dashboard.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "blocks": {
+                            "type": "array",
+                            "description": "Array of UI blocks for the dashboard"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pymongo": "pymongo>=4.5.0"
+                }
+            }
+        ]
+    },
+    {
         "schedule_id": "ab57de40-8337-4a43-a422-5d53ff1aea29",
         "scope_id": "5e7bd6de-dd94-4414-9ffd-80fef373d43a",
         "cron": "0 8 * * *",
@@ -11,7 +880,8 @@
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/fetch_data.py",
                 "input_schema": {},
-                "output_schema": {}
+                "output_schema": {},
+                "dependencies": {}
             },
             {
                 "task_id": "29f4470f-8e8a-4bcd-a8cc-52728119050c",
@@ -20,7 +890,8 @@
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/clean_and_embed.py",
                 "input_schema": {},
-                "output_schema": {}
+                "output_schema": {},
+                "dependencies": {}
             },
             {
                 "task_id": "f3e3c723-b499-4ed3-aa7e-fa75bd61b50e",
@@ -29,7 +900,8 @@
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/rule_base_sentiment.py",
                 "input_schema": {},
-                "output_schema": {}
+                "output_schema": {},
+                "dependencies": {}
             },
             {
                 "task_id": "1e4f2597-fa5f-4a73-8587-fe6d9f2c24d3",
@@ -38,7 +910,376 @@
                 "arguments": {},
                 "script_url": "s3a://ai-tool-scripts/traditional-logic/generate_dashboard_blocks.py",
                 "input_schema": {},
-                "output_schema": {}
+                "output_schema": {},
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "d08d0c38-1136-4531-ac31-fe42cd25ad02",
+        "scope_id": "eae94b75-1f7e-4f4c-8e0c-ddf7a637756e",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "ac849e6b-ef21-463f-809d-894999bd307a",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/thai_news_rss_fetcher_backfill.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the specific task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope/project"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule execution"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "articles": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "link": {
+                                        "type": "string",
+                                        "description": "URL to the full article"
+                                    },
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Headline of the article"
+                                    },
+                                    "summary": {
+                                        "type": "string",
+                                        "description": "HTML-stripped summary (first 500 chars)"
+                                    },
+                                    "week_of": {
+                                        "type": "string",
+                                        "description": "Starting date of the 7-day window"
+                                    },
+                                    "language": {
+                                        "enum": [
+                                            "th",
+                                            "en"
+                                        ],
+                                        "type": "string",
+                                        "description": "Language code"
+                                    },
+                                    "fetched_at": {
+                                        "type": "string",
+                                        "description": "ISO-formatted fetch timestamp"
+                                    },
+                                    "source_name": {
+                                        "type": "string",
+                                        "description": "Name of the news outlet"
+                                    },
+                                    "published_date": {
+                                        "type": "string",
+                                        "description": "ISO-formatted publication date"
+                                    }
+                                }
+                            },
+                            "description": "Array of news articles parsed from RSS feeds"
+                        },
+                        "file_path": {
+                            "type": "string",
+                            "description": "S3 URI where the data was saved in the data lake"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "requests": "requests>=2.28.0",
+                    "feedparser": "feedparser>=6.0.0"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "d0dd7787-17e1-475a-b941-c43332009d09",
+        "scope_id": "8875faf8-7cc2-4bcf-b2ae-23b53033a0d5",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "e0d4d8aa-98be-4d6a-bd44-cc7db8b6f17f",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": null,
+                "arguments": {
+                    "location": "New York"
+                },
+                "script_url": "s3a://ai-tool-scripts/traditional-logic/weather_summary.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id",
+                        "location"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string"
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "User\u2011specified location (city name, address, etc.)"
+                        },
+                        "scope_id": {
+                            "type": "string"
+                        },
+                        "schedule_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "required": [
+                        "summary",
+                        "blocks"
+                    ],
+                    "properties": {
+                        "blocks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "type",
+                                    "colSpan",
+                                    "content"
+                                ],
+                                "properties": {
+                                    "type": {
+                                        "enum": [
+                                            "markdown"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "colSpan": {
+                                        "type": "integer"
+                                    },
+                                    "content": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        },
+                        "summary": {
+                            "type": "string",
+                            "description": "Concise natural\u2011language weather description."
+                        }
+                    }
+                },
+                "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "e7ba11f6-68f4-4a5f-9aff-46151c6a56ac",
+        "scope_id": "bacce018-cdbe-49f2-9b53-e7787e52d379",
+        "cron": "0 * * * *",
+        "tasks": [
+            {
+                "task_id": "68a8af21-b400-4c2d-839a-ec57e7fc79f8",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetch_weather_data.py",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope/project"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule run"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "humidity": {
+                            "type": "integer",
+                            "description": "Humidity percentage"
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "City and country of weather reading"
+                        },
+                        "uv_index": {
+                            "type": "integer",
+                            "description": "UV index reading"
+                        },
+                        "feels_like_c": {
+                            "type": "number",
+                            "description": "Feels-like temperature in Celsius"
+                        },
+                        "temperature_c": {
+                            "type": "number",
+                            "description": "Current temperature in Celsius"
+                        },
+                        "visibility_km": {
+                            "type": "integer",
+                            "description": "Visibility in kilometers"
+                        },
+                        "wind_direction": {
+                            "type": "string",
+                            "description": "Wind direction (16-point compass)"
+                        },
+                        "wind_speed_kmh": {
+                            "type": "integer",
+                            "description": "Wind speed in km/h"
+                        },
+                        "weather_description": {
+                            "type": "string",
+                            "description": "Weather condition description in English"
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "cfb02b01-2ce5-473a-b94c-d0fa804cb353",
+                "task_type": "TRADITIONAL_LOGIC",
+                "depends_on_task_id": "68a8af21-b400-4c2d-839a-ec57e7fc79f8",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/summarize_weather_thai.py",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope/project"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule run"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "thai_summary": {
+                            "type": "string",
+                            "description": "Full Thai language weather summary with emojis and recommendations"
+                        },
+                        "weather_data": {
+                            "type": "object",
+                            "properties": {
+                                "humidity": {
+                                    "type": "integer",
+                                    "description": "Humidity percentage"
+                                },
+                                "location": {
+                                    "type": "string",
+                                    "description": "City and country"
+                                },
+                                "uv_index": {
+                                    "type": "integer",
+                                    "description": "UV index"
+                                },
+                                "feels_like_c": {
+                                    "type": "number",
+                                    "description": "Feels-like temperature"
+                                },
+                                "temperature_c": {
+                                    "type": "number",
+                                    "description": "Temperature in Celsius"
+                                },
+                                "visibility_km": {
+                                    "type": "integer",
+                                    "description": "Visibility in km"
+                                },
+                                "wind_direction": {
+                                    "type": "string",
+                                    "description": "Wind direction in Thai"
+                                },
+                                "wind_speed_kmh": {
+                                    "type": "integer",
+                                    "description": "Wind speed in km/h"
+                                },
+                                "thai_description": {
+                                    "type": "string",
+                                    "description": "Translated Thai weather description"
+                                },
+                                "thai_summary_text": {
+                                    "type": "string",
+                                    "description": "Complete Thai summary text"
+                                },
+                                "weather_description": {
+                                    "type": "string",
+                                    "description": "Original English weather description"
+                                }
+                            }
+                        }
+                    }
+                },
+                "dependencies": {}
+            },
+            {
+                "task_id": "5fe5296b-0716-4d8c-bdcd-b822d393aff9",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "cfb02b01-2ce5-473a-b94c-d0fa804cb353",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/display_weather_visualize_thai.py",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope/project"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule run"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "Success status"
+                        },
+                        "blocks_count": {
+                            "type": "integer",
+                            "description": "Number of UI blocks created"
+                        }
+                    }
+                },
+                "dependencies": {}
             }
         ]
     },

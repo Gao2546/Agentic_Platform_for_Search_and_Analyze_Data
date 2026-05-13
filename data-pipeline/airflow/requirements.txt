@@ -1,8 +1,35 @@
+# --- Database & Drivers ---
 pymongo==4.17.0
 psycopg2-binary==2.9.12
 asyncpg==0.31.0
+
+# --- Airflow & Spark ---
 apache-airflow-providers-apache-spark
 apache-airflow-providers-fab
 pyspark==4.0.2
+
+# --- Image & Vision ---
 pillow
 opencv-python
+
+# --- Finance & Data ---
+yfinance
+pandas
+numpy
+pyarrow
+pandas-ta
+
+# --- Web Scraping & APIs ---
+feedparser
+boto3
+requests
+beautifulsoup4
+dateparser
+lxml
+
+# --- AI, Vector & Utilities ---
+openai
+sentence-transformers
+tiktoken
+tenacity
+pydantic

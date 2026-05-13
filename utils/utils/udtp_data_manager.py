@@ -10,6 +10,7 @@ import cv2
 import tempfile
 from psycopg2.extras import Json
 from typing import Dict, Any, List, Optional, Union
+import math
 
 class UDTPDataManager:
     def __init__(self):
@@ -25,6 +26,27 @@ class UDTPDataManager:
 
     def _get_db_connection(self):
         return psycopg2.connect(self.db_dsn)
+
+    # --- ส่วนที่เพิ่มเข้ามาใหม่: Helper method สำหรับทำความสะอาดข้อมูลก่อนแปลงเป็น JSON ---
+    def _sanitize_for_json(self, obj: Any) -> Any:
+        """
+        แปลงข้อมูลที่ไม่รองรับใน JSON มาตรฐาน (เช่น Tuple Keys หรือ NaN)
+        ให้เป็นรูปแบบที่สามารถ Serialization ได้อย่างปลอดภัย
+        """
+        if isinstance(obj, dict):
+            # แปลง Key ที่เป็น Tuple ให้เป็น String และทำ Recursive กับ Value
+            return {
+                (str(k) if isinstance(k, tuple) else k): self._sanitize_for_json(v) 
+                for k, v in obj.items()
+            }
+        elif isinstance(obj, list):
+            # ทำ Recursive กับสมาชิกใน List
+            return [self._sanitize_for_json(item) for item in obj]
+        elif isinstance(obj, float) and math.isnan(obj):
+            # แปลง NaN เป็น None (ซึ่งจะถูกแปลงเป็น null ใน JSON)
+            return None
+        return obj
+    # -------------------------------------------------------------------------
 
     def _generate_deterministic_metadata(self, data_bytes: bytes, file_extension: str) -> Dict[str, Any]:
         """Deep Metadata Inspection สำหรับไฟล์หลากหลายประเภท"""
@@ -96,7 +118,11 @@ class UDTPDataManager:
         
         # เตรียม Data Bytes
         if isinstance(data, (dict, list)):
-            data_bytes = json.dumps(data, sort_keys=True, separators=(',', ':')).encode('utf-8')
+            # --- ส่วนที่แก้ไข: ป้องกัน Error จากโครงสร้างข้อมูล ---
+            sanitized_data = self._sanitize_for_json(data)
+            # เพิ่ม default=str ใน json.dumps เพื่อรับมือกับ Object ที่แปลกๆ เช่น pandas Timestamp
+            data_bytes = json.dumps(sanitized_data, sort_keys=True, separators=(',', ':'), default=str).encode('utf-8')
+            # ----------------------------------------------------
         elif isinstance(data, str):
             data_bytes = data.encode('utf-8')
         else:
@@ -133,6 +159,8 @@ class UDTPDataManager:
             ) ON CONFLICT (asset_id) DO UPDATE SET 
                 updated_at = CURRENT_TIMESTAMP,
                 udtp_scope_ids = ARRAY(SELECT DISTINCT UNNEST(file_assets.udtp_scope_ids || EXCLUDED.udtp_scope_ids)),
+                udtp_schedule_ids = ARRAY(SELECT DISTINCT UNNEST(file_assets.udtp_schedule_ids || EXCLUDED.udtp_schedule_ids)),
+                udtp_task_ids = ARRAY(SELECT DISTINCT UNNEST(file_assets.udtp_task_ids || EXCLUDED.udtp_task_ids)),
                 udtp_tags = ARRAY(SELECT DISTINCT UNNEST(file_assets.udtp_tags || EXCLUDED.udtp_tags));
         """
         

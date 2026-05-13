@@ -57,8 +57,13 @@ CREATE TABLE tools (
     input_schema JSONB,
     output_schema JSONB,
     author_type author_type_enum NOT NULL,
+    description TEXT,
+    description_for_vector_db TEXT,
+    tags TEXT[] DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_tools_tags ON tools USING GIN (tags);
 
 -- =========================================================
 -- Group: Scheduling & Tasks
@@ -70,6 +75,7 @@ CREATE TABLE schedules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     scope_id UUID REFERENCES scopes(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
+    goal TEXT,
     task_mode schedule_mode_enum NOT NULL,
     execution_type execution_type_enum NOT NULL,
     restart_policy restart_policy_enum,
@@ -107,6 +113,7 @@ CREATE TYPE data_stage_enum AS ENUM ('1_RAW', '2_ETL', '3_ANALYZE', '4_VISUALIZE
 -- =========================================================
 CREATE TABLE knowledge_embeddings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tool_id UUID REFERENCES tools(id) ON DELETE CASCADE,
     source_reference TEXT NOT NULL,
     chunk_text TEXT NOT NULL,
     embedding VECTOR(1536), 
@@ -169,3 +176,13 @@ CREATE INDEX idx_file_assets_udtp_schedules ON file_assets USING GIN (udtp_sched
 CREATE INDEX idx_file_assets_udtp_tasks ON file_assets USING GIN (udtp_task_ids);
 CREATE INDEX idx_file_assets_udtp_tags ON file_assets USING GIN (udtp_tags);
 CREATE INDEX idx_file_assets_udtp_stage ON file_assets (udtp_stage);
+
+CREATE TABLE agent_reasoning (
+    scope_id UUID PRIMARY KEY REFERENCES scopes(id) ON DELETE CASCADE,
+    logs JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_reasoning_scope_id ON agent_reasoning (scope_id);
+CREATE INDEX idx_agent_reasoning_logs ON agent_reasoning USING GIN (logs);

@@ -1,15 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import * as Recharts from 'recharts';
 import { 
   LineChart, Line, BarChart, Bar, AreaChart, Area, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
 } from 'recharts';
-import { TrendingUp, TrendingDown, Minus, Code, LayoutTemplate } from 'lucide-react';
-import { LiveProvider, LiveError, LivePreview } from 'react-live';
-import { AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 // ==========================================
 // 1. Text & Markdown Block
@@ -100,38 +96,39 @@ export const TableBlock = ({ payload }) => {
 };
 
 // ==========================================
-// 4. Graph / Chart Block (Template อัตโนมัติ & Fallback)
+// 4. Graph / Chart Block (Recharts)
 // ==========================================
 export const ChartBlock = ({ payload }) => {
+  // 🚀 1. ดึง subType โดยถ้า AI ส่ง type="line_chart" มา ให้ถือว่า subType คือ 'line'
   const inferredSubType = payload.type?.includes('_chart') 
     ? payload.type.split('_')[0] 
     : payload.subType || 'line';
 
   const { data, config, title, label } = payload;
   
-  // Auto-Detect X-Axis
-  let xAxisKey = payload.xAxis || config?.xAxisKey;
-  if (!xAxisKey && data && data.length > 0) {
-      const keys = Object.keys(data[0]);
-      const possibleTimeKey = keys.find(k => ['date', 'time', 'timestamp', 'name'].includes(k.toLowerCase()));
-      xAxisKey = possibleTimeKey || keys[0];
-  } else if (!xAxisKey) {
-      xAxisKey = 'name';
-  }
+  // 🚀 2. รองรับทั้งโครงสร้างแบบซ่อนใน config และแบบส่งมาตรงๆ
+  const xAxisKey = payload.xAxis || config?.xAxisKey || 'name';
   
-  // Auto-Detect Y-Axis
+  // 🚀 3. จัดการ yAxis: แปลง yAxis ["macd", "signal"] ให้กลายเป็น format เส้นของ Recharts
   let lines = config?.lines || [];
   if (payload.yAxis && Array.isArray(payload.yAxis)) {
-      lines = payload.yAxis.map(key => ({ dataKey: key, name: key.toUpperCase() }));
-  } else if (lines.length === 0 && data && data.length > 0) {
+      lines = payload.yAxis.map(key => ({ 
+        dataKey: key, 
+        name: key.toUpperCase() 
+      }));
+  } else if (!config?.lines && data && data.length > 0) {
+      // Fallback: ถ้า AI ไม่บอกแกน Y มาเลย ให้เอา key ที่เป็นตัวเลขทั้งหมดมาวาดเส้น
       const firstRow = data[0];
       lines = Object.keys(firstRow)
         .filter(key => key !== xAxisKey && typeof firstRow[key] === 'number')
         .map(key => ({ dataKey: key, name: key.toUpperCase() }));
   }
 
+  // ใช้ title หรือ label อันใดอันหนึ่ง
   const displayTitle = title || label;
-  const colors = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+  // กำหนดสีมาตรฐานของกราฟ
+  const colors = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6'];
 
   const renderChart = () => {
     switch (inferredSubType) {
@@ -191,57 +188,7 @@ export const ChartBlock = ({ payload }) => {
 };
 
 // ==========================================
-// 🚀 5. Generative UI Block (AI Custom Code)
-// ==========================================
-export const CustomCodeBlock = ({ payload }) => {
-  const { source_code, data, fallback_type = 'chart', title, label } = payload;
-  const [useFallback, setUseFallback] = useState(false);
-
-  // ถ้าไม่มีโค้ดมาให้ หรือสวิตช์เป็น Fallback ให้โยนกลับไปใช้ ChartBlock ปกติ
-  if (!source_code || useFallback) {
-    return (
-      <div className="relative group">
-        <ChartBlock payload={{ ...payload, type: fallback_type }} />
-        {source_code && (
-          <button onClick={() => setUseFallback(false)} className="absolute top-2 right-2 bg-purple-100 text-purple-700 hover:bg-purple-200 text-[10px] px-2 py-1 rounded font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-            <Code size={12} /> สลับไปใช้ AI Code
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  // เตรียม Environment ให้ AI: โยน React, Data และไลบรารี Recharts ทั้งหมดเข้าไป
-  const scope = { React, ...Recharts, data };
-  const displayTitle = title || label || "AI Custom Visualization";
-
-  return (
-    <div className="bg-gradient-to-br from-purple-50 to-white p-5 rounded-xl shadow-sm border border-purple-200 relative group">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2">
-          ✨ {displayTitle}
-        </h3>
-        <button 
-          onClick={() => setUseFallback(true)}
-          className="bg-white text-gray-500 hover:text-gray-800 border border-gray-200 text-xs px-2 py-1 rounded font-medium shadow-sm transition-colors flex items-center gap-1 opacity-0 group-hover:opacity-100"
-        >
-          <LayoutTemplate size={12} /> ใช้ Template พื้นฐาน
-        </button>
-      </div>
-
-      {/* รันโค้ดสด (noInline=true บังคับให้ AI ต้องเขียน render(<App/>)) */}
-      <LiveProvider code={source_code} scope={scope} noInline={true}>
-        <div className="h-[300px] w-full">
-          <LivePreview className="w-full h-full" />
-        </div>
-        <LiveError className="text-red-500 text-xs bg-red-50 border border-red-200 p-3 rounded-lg mt-4 overflow-auto max-h-32 font-mono" />
-      </LiveProvider>
-    </div>
-  );
-};
-
-// ==========================================
-// 6. Media & Embed Block
+// 5. Media & Embed Block
 // ==========================================
 export const EmbedBlock = ({ payload }) => {
   const { provider, url, title } = payload;
@@ -284,76 +231,6 @@ export const EmbedBlock = ({ payload }) => {
       Unsupported embed provider: <span className="font-bold">{provider}</span>
       <br/>
       <a href={url} target="_blank" rel="noreferrer" className="text-blue-500 underline mt-2 block">Open Link</a>
-    </div>
-  );
-};
-
-
-// ==========================================
-// 7. Alert / Insight Block (NEW)
-// ==========================================
-export const AlertBlock = ({ payload }) => {
-  const { title, message, severity = 'info' } = payload;
-  
-  const severityConfig = {
-    info: { icon: Info, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
-    success: { icon: CheckCircle, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-    warning: { icon: AlertTriangle, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
-    error: { icon: AlertCircle, color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
-  };
-
-  const { icon: Icon, color, bg, border } = severityConfig[severity] || severityConfig.info;
-
-  return (
-    <div className={`p-5 rounded-xl border ${bg} ${border} shadow-sm flex gap-4 items-start`}>
-      <Icon className={`${color} mt-0.5 shrink-0`} size={24} />
-      <div>
-        {title && <h4 className={`text-base font-bold ${color} mb-1`}>{title}</h4>}
-        <p className={`text-sm ${color} opacity-90 leading-relaxed`}>{message}</p>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 8. Pie Chart Block (NEW)
-// ==========================================
-export const PieChartBlock = ({ payload }) => {
-  const { title, data, config } = payload;
-  const nameKey = config?.nameKey || 'name';
-  const dataKey = config?.dataKey || 'value';
-  
-  // ชุดสีสำหรับ Pie Chart
-  const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
-
-  return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full">
-      {title && <h3 className="text-lg font-bold text-gray-800 mb-4">{title}</h3>}
-      <div className="h-[300px] w-full flex-grow">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={100}
-              paddingAngle={5}
-              dataKey={dataKey}
-              nameKey={nameKey}
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-            >
-              {data?.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <RechartsTooltip 
-              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-            />
-            <RechartsLegend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   );
 };

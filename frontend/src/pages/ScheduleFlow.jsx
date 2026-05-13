@@ -7,6 +7,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { projectAPI } from '../services/api';
 import DynamicWidgetRenderer from '../components/DynamicWidgetRenderer';
+import CodeEditorModal from '../components/CodeEditorModal';
+import { TaskSkeleton } from '../components/Skeletons';
 import { useTranslation } from 'react-i18next';
 
 export default function ScheduleFlow() {
@@ -29,11 +31,48 @@ export default function ScheduleFlow() {
     const [isToolModalOpen, setIsToolModalOpen] = useState(false);
     const [editingTool, setEditingTool] = useState(null);
     const [toolFile, setToolFile] = useState(null);
-    const [toolFormData, setToolFormData] = useState({ name: '', language: 'Python', author_type: 'HUMAN' });
+    const [toolFormData, setToolFormData] = useState({
+        name: '', language: 'Python', author_type: 'HUMAN',
+        description: '', description_for_vector_db: '', tags: '',
+        input_schema: '{\n  \n}', output_schema: '{\n  \n}'
+    });
 
     const [insightsBlocks, setInsightsBlocks] = useState([]);
+    const [currentSchedule, setCurrentSchedule] = useState(null);
 
-    useEffect(() => { loadFlowData(); loadTools(); loadInsightsData(); }, [scheduleId]);
+    const [isCodeEditorOpen, setIsCodeEditorOpen] = useState(false);
+    const [previewCode, setPreviewCode] = useState('');
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+    useEffect(() => { 
+        loadScheduleDetails();
+        loadFlowData(); 
+        loadTools(); 
+        loadInsightsData(); 
+    }, [scheduleId]);
+
+    // 🚀 Polling Logic สำหรับหน้า Pipeline
+    useEffect(() => {
+        let interval;
+        // เช็คว่ามี Node จำลองที่กำลังโหลดอยู่ หรือกระดานว่างเปล่า
+        const isLoadingNodes = nodes.length > 0 && nodes[0].id.startsWith('loading-');
+        const isEmpty = nodes.length === 0;
+
+        if (currentSchedule?.task_mode === 'AI_AGENT' && (isEmpty || isLoadingNodes)) {
+            interval = setInterval(() => {
+                loadFlowData();
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [currentSchedule, nodes]);
+
+    const loadScheduleDetails = async () => {
+        try {
+            const res = await projectAPI.getSchedulesByScope(scopeId);
+            const schedule = res.data.data.find(s => s.id === scheduleId);
+            setCurrentSchedule(schedule);
+        } catch (error) { console.error(error); }
+    };
 
     const loadTools = async () => {
         try { const res = await projectAPI.getTools(); setTools(res.data.data || []); } catch (error) { console.error(error); }
@@ -47,6 +86,24 @@ export default function ScheduleFlow() {
         try {
             const res = await projectAPI.getTasksBySchedule(scheduleId);
             const tasks = res.data.data || [];
+            
+            if (tasks.length === 0) {
+                // 🚀 แก้ไขเงื่อนไขตรงนี้: เช็คว่า "มีข้อมูล Schedule แล้ว" และ "โหมดเป็น AI_AGENT"
+                if (currentSchedule && currentSchedule.task_mode === 'AI_AGENT') {
+                    const loadingNodes = [
+                        { id: 'loading-1', position: { x: 150, y: 150 }, type: 'default', data: { label: <TaskSkeleton /> }, draggable: false },
+                        { id: 'loading-2', position: { x: 450, y: 150 }, type: 'default', data: { label: <TaskSkeleton /> }, draggable: false }
+                    ];``
+                    const loadingEdges = [
+                        { id: 'e-load', source: 'loading-1', target: 'loading-2', animated: true, style: { stroke: '#a5b4fc', strokeWidth: 2, strokeDasharray: '5,5' } }
+                    ];
+                    setNodes(loadingNodes);
+                    setEdges(loadingEdges);
+                } else {
+                    setNodes([]); setEdges([]);
+                }
+                return;
+            }
             
             const initialNodes = tasks.map((task) => ({
                 id: task.id,
@@ -116,30 +173,126 @@ export default function ScheduleFlow() {
     };
 
     const openAddToolModal = () => { setEditingTool(null); setToolFile(null); setToolFormData({ name: '', language: 'Python', author_type: 'HUMAN' }); setIsToolModalOpen(true); };
-    const openEditToolModal = () => {
-        const toolToEdit = tools.find(t => t.id === taskFormData.tool_id);
-        if (!toolToEdit) return;
-        setEditingTool(toolToEdit); setToolFormData({ name: toolToEdit.name, language: toolToEdit.language, author_type: toolToEdit.author_type }); setIsToolModalOpen(true);
-    };
+    const openToolModal = (tool_id = null) => {
+            if (tool_id) {
+                projectAPI.getToolsDetails(tool_id).then(toolRes => {
+                    const tool = toolRes.data.data;
+                    if (tool) {
+                        setEditingTool(tool);
+                        setToolFormData({ 
+                            name: tool.name, 
+                            language: tool.language, 
+                            author_type: tool.author_type,
+                            description: tool.description || '',
+                            description_for_vector_db: tool.description_for_vector_db || '',
+                            tags: tool.tags ? tool.tags.join(', ') : '', // แปลง Array กลับเป็น String ไว้แสดงผล
+                            input_schema: tool.input_schema ? JSON.stringify(tool.input_schema, null, 2) : '{\n  \n}',
+                            output_schema: tool.output_schema ? JSON.stringify(tool.output_schema, null, 2) : '{\n  \n}'
+                        });
+                    } else {
+                        setEditingTool(null);
+                        setToolFile(null);
+                        setToolFormData({ 
+                            name: '', language: 'Python', author_type: 'HUMAN',
+                            description: '', description_for_vector_db: '', tags: '',
+                            input_schema: '{\n  \n}', output_schema: '{\n  \n}'
+                        });
+                    }}).catch(err => {
+                        alert(`${t('error')}: ไม่สามารถโหลดรายละเอียดเครื่องมือได้ (${err.message})`);
+                    });
+            setIsToolModalOpen(true);
+        };
+    }
 
     const handleToolSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (editingTool) { await projectAPI.updateTool(editingTool.id, toolFormData); alert(`✅ ${t('tool_edit_success')}`); } 
-            else {
-                if (!toolFile) { alert(t('please_select_tool_file')); return; }
-                const formData = new FormData(); formData.append('name', toolFormData.name); formData.append('language', toolFormData.language); formData.append('author_type', toolFormData.author_type); formData.append('file', toolFile);
-                const res = await projectAPI.uploadTool(formData);
-                alert(`✅ ${t('tool_upload_success')}`);
-                if (res.data.tool_id) setTaskFormData(prev => ({ ...prev, tool_id: res.data.tool_id }));
+            const tagsArray = toolFormData.tags ? toolFormData.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+
+            // 🚀 เตรียม FormData ชุดเดียว ใช้ได้ทั้งอัปโหลดใหม่และแก้ไข
+            const fd = new FormData();
+            fd.append('name', toolFormData.name);
+            fd.append('language', toolFormData.language);
+            fd.append('author_type', toolFormData.author_type);
+            fd.append('description', toolFormData.description || '');
+            fd.append('description_for_vector_db', toolFormData.description_for_vector_db || '');
+            fd.append('tags', JSON.stringify(tagsArray));
+            fd.append('input_schema', toolFormData.input_schema);
+            fd.append('output_schema', toolFormData.output_schema);
+
+            // ถ้ามีการแนบไฟล์ใหม่เข้ามา ก็แพ็คใส่เข้าไปด้วย
+            if (toolFile) {
+                fd.append('file', toolFile);
             }
-            setIsToolModalOpen(false); loadTools();
-        } catch (error) { alert(`${t('error')}: ${error.message}`); }
+
+            if (editingTool) {
+                // กรณีเป็นการแก้ไข (Update) 
+                await projectAPI.updateTool(editingTool.id, fd); // <-- API ของคุณจะส่งเป็น multipart/form-data อัตโนมัติเพราะเป็น formData
+                alert(`✅ ${t('tool_edit_success')}`);
+            } else {
+                // กรณีเป็นการสร้างใหม่ (Upload New)
+                if (!toolFile) return alert(t("please_select_file"));
+                const res = await projectAPI.uploadTool(fd);
+                alert(`✅ ${t('tool_upload_success')}`);
+
+                // กรณีที่เรียกจากหน้า ScheduleFlow เพื่อเซ็ตค่า tool_id ให้ Task กลับ
+                if (res && res.data && res.data.tool_id && typeof setTaskFormData !== 'undefined') {
+                    setTaskFormData(prev => ({ ...prev, tool_id: res.data.tool_id }));
+                }
+            }
+            setIsToolModalOpen(false);
+            if (typeof loadTools === 'function') loadTools();
+            if (typeof loadInitialData === 'function') loadInitialData(); // สำหรับหน้า ScopeList
+        } catch (error) { 
+            alert(`${t('error')}: ${error.message}`); 
+        }
     };
 
     const handleDeleteTool = async (toolId) => {
         if (!window.confirm(t('confirm_delete_tool_warning'))) return;
         try { await projectAPI.deleteTool(toolId); setIsToolModalOpen(false); loadTools(); setTaskFormData(prev => ({ ...prev, tool_id: '' })); } catch (error) {}
+    };
+
+    const handlePreviewFile = async () => {
+        if (!editingTool) return;
+            setIsPreviewLoading(true);
+            try {
+                const res = await projectAPI.previewToolFile(editingTool.id);
+                setPreviewCode(res.data.content);
+                setIsCodeEditorOpen(true); // โหลดเสร็จค่อยสั่งเปิด Modal
+            } catch (error) {
+                alert(`${t('error')}: ไม่สามารถโหลดไฟล์ได้ (${error.message})`);
+            } finally {
+                setIsPreviewLoading(false);
+            }
+        };
+
+    const handleSaveCode = async () => {
+        if (!editingTool || previewCode === null) return;
+        setIsSavingCode(true);
+        
+        try {
+            const fd = new FormData();
+
+            // 1. จำลองข้อความ String ให้กลายเป็น File Object
+            const ext = toolFormData.language === 'Python' ? 'py' : toolFormData.language === 'Go' ? 'go' : 'cpp';
+            const fileName = `${editingTool.name || 'script_edited'}.${ext}`;
+            const fileBlob = new Blob([previewCode], { type: 'text/plain' });
+            const newFile = new File([fileBlob], fileName);
+
+            // 2. แนบไฟล์เข้าไปใน FormData (เราส่งแค่นี้ Backend จะรับรู้ว่าอัปเดตแค่ไฟล์)
+            fd.append('file', newFile);
+
+            // 3. ยิง API บันทึก
+            await projectAPI.updateTool(editingTool.id, fd);
+            alert(`✅ ${t('tool_edit_success')} (บันทึกสคริปต์เรียบร้อย)`);
+
+            setPreviewCode(null); // ปิดหน้าต่าง
+        } catch (error) {
+            alert(`${t('error')}: ไม่สามารถบันทึกโค้ดได้ (${error.message})`);
+        } finally {
+            setIsSavingCode(false);
+        }
     };
 
     if (loading) return <div className="p-8 text-center text-gray-500 font-bold mt-10">{t('loading_data')}</div>;
@@ -216,7 +369,7 @@ export default function ScheduleFlow() {
                                         {tools.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
                                     </select>
                                     {taskFormData.tool_id && (
-                                        <button type="button" onClick={openEditToolModal} className="px-3 py-2 bg-gray-100 text-blue-600 rounded hover:bg-blue-50 border border-gray-300 font-bold transition">✎</button>
+                                        <button type="button" onClick={() => openToolModal(taskFormData.tool_id)} className="px-3 py-2 bg-gray-100 text-blue-600 rounded hover:bg-blue-50 border border-gray-300 font-bold transition">✎</button>
                                     )}
                                 </div>
                             </div>
@@ -239,64 +392,148 @@ export default function ScheduleFlow() {
 
             {/* Modal: Tool Management */}
             {isToolModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border-t-4 border-indigo-500">
-                        <div className="flex justify-between items-center mb-4">
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl border-t-4 border-indigo-500 flex flex-col" style={{ maxHeight: '95vh' }}>
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
                             <h2 className="text-xl font-bold text-gray-800">
                                 {editingTool ? t('edit_tool') : t('upload_new_tool')}
                             </h2>
                             <button onClick={() => setIsToolModalOpen(false)} className="text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
                         </div>
-                        <form onSubmit={handleToolSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-1">{t('tool_name')}</label>
-                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                    value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} required />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">{t('language')}</label>
-                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={toolFormData.language} onChange={e => setToolFormData({...toolFormData, language: e.target.value})}>
-                                        <option value="Python">Python</option>
-                                        <option value="Go">Go</option>
-                                        <option value="C++">C++</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">{t('author')}</label>
-                                    <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={toolFormData.author_type} onChange={e => setToolFormData({...toolFormData, author_type: e.target.value})}>
-                                        <option value="HUMAN">HUMAN</option>
-                                        <option value="AI_GENERATED">AI_GENERATED</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            {!editingTool && (
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-1">{t('script_file')}</label>
-                                    <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
-                                        onChange={e => setToolFile(e.target.files[0])} required />
-                                </div>
-                            )}
 
-                            <div className="flex justify-between items-center pt-4 border-t mt-4">
-                                {editingTool && (
-                                    <button type="button" onClick={() => handleDeleteTool(editingTool.id)} className="text-red-600 font-bold hover:bg-red-50 p-2 rounded transition">
-                                        🗑️ {t('delete_tool')}
-                                    </button>
-                                )}
-                                <div className={`flex space-x-3 ${!editingTool ? 'w-full justify-end' : ''}`}>
-                                    <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">{t('cancel')}</button>
-                                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">
-                                        {editingTool ? t('save_edit') : t('confirm_upload')}
-                                    </button>
+                        {/* ทำให้ส่วนของแบบฟอร์มเลื่อน Scroll ได้ */}
+                        <div className="overflow-y-auto pr-2 custom-scrollbar" style={{ flex: 1 }}>
+                            <form id="toolForm" onSubmit={handleToolSubmit} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">{t('tool_name')}</label>
+                                        <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                            value={toolFormData.name} onChange={e => setToolFormData({...toolFormData, name: e.target.value})} required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">Tags (Comma separated)</label>
+                                        <input type="text" placeholder="e.g. finance, python, api" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                            value={toolFormData.tags} onChange={e => setToolFormData({...toolFormData, tags: e.target.value})} />
+                                    </div>
                                 </div>
+            
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">{t('language')}</label>
+                                        <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            value={toolFormData.language} onChange={e => setToolFormData({...toolFormData, language: e.target.value})}>
+                                            <option value="Python">Python</option>
+                                            <option value="Go">Go</option>
+                                            <option value="C++">C++</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">{t('author')}</label>
+                                        <select className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            value={toolFormData.author_type} onChange={e => setToolFormData({...toolFormData, author_type: e.target.value})}>
+                                            <option value="HUMAN">HUMAN</option>
+                                            <option value="AI_GENERATED">AI_GENERATED</option>
+                                        </select>
+                                    </div>
+                                </div>
+            
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">Description (For UI)</label>
+                                    <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"
+                                        value={toolFormData.description} onChange={e => setToolFormData({...toolFormData, description: e.target.value})} />
+                                </div>
+            
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">Description for Vector DB (AI Context)</label>
+                                    <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50" rows="3"
+                                        placeholder="อธิบายการทำงานเชิงลึก เพื่อให้ AI ค้นหาและทำความเข้าใจ Tool ตัวนี้ได้แม่นยำขึ้น..."
+                                        value={toolFormData.description_for_vector_db} onChange={e => setToolFormData({...toolFormData, description_for_vector_db: e.target.value})} />
+                                </div>
+            
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">Input Schema (JSON)</label>
+                                        <textarea className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" rows="4"
+                                            value={toolFormData.input_schema} onChange={e => setToolFormData({...toolFormData, input_schema: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">Output Schema (JSON)</label>
+                                        <textarea className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" rows="4"
+                                            value={toolFormData.output_schema} onChange={e => setToolFormData({...toolFormData, output_schema: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                {/* {!editingTool && (
+                                    <div className="pt-2">
+                                        <label className="block text-gray-700 text-sm font-bold mb-1">{t('script_file')}</label>
+                                        <input type="file" className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                                            onChange={e => setToolFile(e.target.files[0])} required />
+                                    </div>
+                                )} */}
+
+                                <div className="pt-4 border-t mt-2">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-gray-700 text-sm font-bold">
+                                            {t('script_file')} 
+                                            {editingTool && <span className="text-gray-400 font-normal ml-2">(อัปโหลดเพื่อแทนที่)</span>}
+                                        </label>
+
+                                        {/* 🚀 ปุ่ม Preview: จะโชว์เฉพาะตอน Edit Tool เท่านั้น */}
+                                        {editingTool && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handlePreviewFile}
+                                                disabled={isPreviewLoading}
+                                                className="text-xs flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md font-bold transition border"
+                                            >
+                                                {isPreviewLoading ? '⏳ กำลังโหลด...' : '🔍 ดูโค้ดไฟล์ปัจจุบัน'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    <input 
+                                        type="file" 
+                                        className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                                        onChange={e => setToolFile(e.target.files[0])} 
+                                        required={!editingTool}
+                                    />
+                                </div>
+
+                            </form>
+                        </div>
+                            
+                        {/* ปุ่มกด (Fix ให้อยู่ด้านล่างสุด) */}
+                        <div className="flex justify-between items-center pt-4 border-t mt-4 bg-white">
+                            {editingTool ? (
+                                <button type="button" onClick={() => handleDeleteTool(editingTool.id)} className="text-red-600 font-bold hover:bg-red-50 p-2 rounded transition">
+                                    🗑️ {t('delete_tool')}
+                                </button>
+                            ) : <div />}
+                            <div className={`flex space-x-3 ${!editingTool ? 'w-full justify-end' : ''}`}>
+                                <button type="button" onClick={() => setIsToolModalOpen(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-medium">{t('cancel')}</button>
+                                <button type="submit" form="toolForm" className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">
+                                    {editingTool ? t('save_edit') : t('confirm_upload')}
+                                </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
+            )}
+
+            {/* Code Preview & Edit Modal */}
+            {previewCode !== null && (
+                <CodeEditorModal 
+                isOpen={isCodeEditorOpen}
+                onClose={() => setIsCodeEditorOpen(false)}
+                toolId={editingTool?.id}
+                toolName={editingTool?.name}
+                language={toolFormData.language}
+                initialCode={previewCode}
+                onSaveSuccess={() => {
+                    // ทำสิ่งที่ต้องการหลังจากเซฟเสร็จ เช่น สั่งรีเฟรชข้อมูล
+                    setIsCodeEditorOpen(false);
+                }}
+            />
             )}
         </div>
     );

@@ -28,7 +28,8 @@ function App() {
               <span className="font-bold text-xl tracking-wider">{t('app_name')}</span>
               <div className="flex space-x-4">
                 {/* <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('dashboard')}</Link> */}
-                <Link to="/scopes" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('scopes')}</Link>
+                {/* <Link to="/scopes" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('scopes')}</Link> */}
+                <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">{t('scopes')}</Link>
               </div>
             </div>
             <div className="flex items-center relative">
@@ -42,7 +43,8 @@ function App() {
         <main className="flex-1 max-w-7xl w-full mx-auto p-6">
           <Routes>
             {/* <Route path="/" element={<Dashboard />} /> */}
-            <Route path="/scopes" element={<ScopeList />} />
+            {/* <Route path="/scopes" element={<ScopeList />} /> */}
+            <Route path="/" element={<ScopeList />} />
             <Route path="/scopes/:scopeId" element={<ScopeDetail />} />
             <Route path="/scopes/:scopeId/schedules/:scheduleId/flow" element={<ScheduleFlow />} />
           </Routes>

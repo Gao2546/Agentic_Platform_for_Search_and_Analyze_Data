@@ -26,14 +26,12 @@ services:
     networks:
       - shared_net
     volumes:
-      # เชื่อมไฟล์ init-minio.sh จากเครื่องเรา เข้าไปไว้ใน Container
       - ./init-scripts/init-minio.sh:/init-minio.sh
-    # สั่งรันไฟล์สคริปต์
     entrypoint: /bin/sh /init-minio.sh
 
   # 2. PostgreSQL with pgvector - Metadata & Vector Store
   postgres:
-    image: ankane/pgvector:latest # Image ที่มี pgvector ติดตั้งมาให้แล้ว
+    image: ankane/pgvector:latest
     container_name: agentic_postgres
     ports:
       - "5433:5432"
@@ -45,10 +43,10 @@ services:
       - shared_net
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../infrastructure/init-scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # โหลด script สร้างตาราง
+      - ../infrastructure/init-scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
 
-  # 3. MongoDB - NoSQL Data Warehouse (Processed Data & AI Insights)
+  # 3. MongoDB - NoSQL Data Warehouse
   mongodb:
     image: mongo:latest
     container_name: agentic_mongodb
@@ -63,13 +61,13 @@ services:
       - mongodb_data:/data/db
     restart: unless-stopped
 
-  # 4. RabbitMQ - Message Broker (Streaming Pipeline)
+  # 4. RabbitMQ - Message Broker
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: agentic_rabbitmq
     ports:
-      - "5672:5672"   # Message broker port
-      - "15672:15672" # Management UI port
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: password123
@@ -77,7 +75,7 @@ services:
       - shared_net
     restart: unless-stopped
 
-# 5. Airflow Init (รันครั้งแรกเพื่อสร้าง User และเตรียม Database ให้ Airflow)
+  # 5. Airflow Init
   airflow-init:
     build: 
       context: ../
@@ -95,7 +93,7 @@ services:
     networks:
       - shared_net
 
-  # 6. Airflow Webserver / API Server
+  # 6. Airflow Webserver
   airflow-webserver:
     build: 
       context: ../
@@ -118,9 +116,6 @@ services:
       - AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
       - AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
-      # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
-      # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
-      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: api-server
     ports:
@@ -129,7 +124,7 @@ services:
       - shared_net
     volumes:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags
-      - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config เข้าไปใน Container เพื่อให้ Webserver อ่านไฟล์ JSON ได้
+      - ../data-pipeline/airflow/config:/opt/airflow/config
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../utils:/opt/utils
 
@@ -139,7 +134,6 @@ services:
       context: ../
       dockerfile: data-pipeline/airflow/Dockerfile
     container_name: agentic_airflow_scheduler
-    # hostname: agentic_airflow_scheduler
     restart: always
     depends_on:
       - postgres
@@ -154,20 +148,20 @@ services:
       - AIRFLOW__API_AUTH__JWT_SECRET=super_secret_jwt_key_for_airflow_3_agentic
       - AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
-      # - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
-      # - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=10
-      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: scheduler
     networks:
       - shared_net
     volumes:
       - ../data-pipeline/airflow/dags:/opt/airflow/dags
-      - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config เข้าไปใน Container เพื่อให้ Scheduler อ่านไฟล์ JSON ได้
+      - ../data-pipeline/airflow/config:/opt/airflow/config
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../utils:/opt/utils
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
-  # 8. Airflow DAG Processor (เพิ่มเข้ามาสำหรับ Airflow 3 โดยเฉพาะ)
+  # 8. Airflow DAG Processor
   airflow-dag-processor:
     build: 
       context: ../
@@ -187,7 +181,6 @@ services:
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
       - AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL=300
       - AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL=30
-      # - AIRFLOW__DAG_PROCESSOR__BUNDLE_REFRESH_CHECK_INTERVAL=10
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/airflow/dags:/opt/utils:$PYTHONPATH
     command: dag-processor
     networks:
@@ -198,7 +191,7 @@ services:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../utils:/opt/utils
 
-  # 9. Spark Master (ตัวควบคุม Cluster)
+  # 9. Spark Master
   spark-master:
     build:
       context: ../
@@ -206,18 +199,20 @@ services:
     container_name: agentic_spark_master
     environment:
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/utils:$PYTHONPATH
-    # 📌 สั่งให้รันเป็น Master Node ด้วยคำสั่งของค่าย Apache โดยตรง
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     ports:
-      - "8081:8080" # Spark Web UI
-      - "7077:7077" # พอร์ตเชื่อมต่อ
+      - "8081:8080"
+      - "7077:7077"
     networks:
       - shared_net
     volumes:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../utils:/opt/utils
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
-  # 10. Spark Worker (โหนดประมวลผล)
+  # 10. Spark Worker
   spark-worker:
     build:
       context: ../
@@ -225,7 +220,6 @@ services:
     container_name: agentic_spark_worker
     environment:
       - PYTHONPATH=/opt/airflow/spark-jobs:/opt/utils:$PYTHONPATH
-    # 📌 สั่งให้รันเป็น Worker Node และชี้เป้าไปที่ Master
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     networks:
       - shared_net
@@ -234,11 +228,14 @@ services:
     volumes:
       - ../data-pipeline/spark-jobs:/opt/airflow/spark-jobs
       - ../utils:/opt/utils
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   # 11. Backend API Service
   backend-api:
     build:
-      context: ../ # สำคัญมาก: ต้องใช้ Root path เป็น Context เพื่อให้เห็นโฟลเดอร์ utils
+      context: ../ 
       dockerfile: backend/Dockerfile
     container_name: agentic_backend
     ports:
@@ -253,24 +250,45 @@ services:
       - AIRFLOW_USER=admin
       - AIRFLOW_PASSWORD=admin
       - AIRFLOW_DAGS_CONFIG_DIR=/opt/airflow/config
-      - PYTHONPATH=/app/utils:$PYTHONPATH # เพิ่ม PYTHONPATH ให้ Backend มองเห็นโค้ดในโฟลเดอร์ต่างๆ
+      - AI_ENGINE_URL=http://ai-engine:8000/api/v1 
+      - PYTHONPATH=/app/utils:$PYTHONPATH 
     depends_on:
       - postgres
       - mongodb
       - minio
     volumes:
-      - ../utils:/app/utils # แมปโฟลเดอร์โค้ดหลักให้ Backend มองเห็น
-      - ../backend/src:/app/backend/src # แมปโฟลเดอร์โค้ด Backend ให้เห็น
-      - ../data-pipeline/airflow/dags:/opt/airflow/dags # แมปโฟลเดอร์ DAGs ให้ Backend มองเห็น (สำหรับ Trigger)
-      - ../data-pipeline/airflow/config:/opt/airflow/config # แมปโฟลเดอร์ config ให้ Backend มองเห็น (สำหรับอ่าน schedules.json)
+      - ../utils:/app/utils 
+      - ../backend/src:/app/backend/src 
+      - ../data-pipeline/airflow/dags:/opt/airflow/dags 
+      - ../data-pipeline/airflow/config:/opt/airflow/config 
 
-  # 12. Streaming Worker (ตัวรับข้อมูล)
+  # 🚀 12. AI Engine Service
+  ai-engine:
+    build:
+      context: ../
+      dockerfile: ai-engine/Dockerfile
+    container_name: agentic_ai_engine
+    ports:
+      - "8001:8000"
+    networks:
+      - shared_net
+    environment:
+      - BACKEND_URL=http://backend-api:8000/api/v1/projects
+      - POSTGRES_DSN=postgresql://admin:password123@postgres:5432/agentic_db
+      - PYTHONPATH=/app:$PYTHONPATH
+    depends_on:
+      - backend-api
+      - postgres
+    volumes:
+      - ../ai-engine:/app  # แมปโฟลเดอร์ให้เขียนโค้ดแล้ว Refresh ได้ (ถ้ารันแบบ reload)
+
+  # 13. Streaming Worker
   streaming-worker:
     build:
       context: ../
       dockerfile: streaming-pipeline/Dockerfile
     container_name: agentic_stream_worker
-    command: ["python", "processors/fast_lane_worker.py"] # Override CMD เพื่อรัน Worker แทน Producer
+    command: ["python", "processors/fast_lane_worker.py"] 
     networks:
       - shared_net
     environment:
@@ -280,13 +298,13 @@ services:
       - rabbitmq
       - backend-api
 
-  # 13. Mock Data Stream (จำลองราคาทองคำเข้า RabbitMQ)
+  # 14. Mock Data Stream
   mock-price-stream:
     build:
       context: ../
       dockerfile: streaming-pipeline/Dockerfile
     container_name: agentic_mock_stream
-    command: ["python", "ingestion/mock_price_stream.py"] # Override CMD เพื่อรัน Producer แทน Worker
+    command: ["python", "ingestion/mock_price_stream.py"] 
     environment:
       - RABBITMQ_HOST=rabbitmq
     networks:
@@ -294,7 +312,7 @@ services:
     depends_on:
       - rabbitmq
 
-  # 14. Frontend Web Application (React + Vite)
+  # 15. Frontend Web Application
   frontend:
     build:
       context: ../
@@ -305,14 +323,11 @@ services:
     networks:
       - shared_net
     environment:
-      # การให้ Frontend เรียก API ต้องใช้ localhost เนื่องจากโค้ดทำงานบน Browser ของ User
       - VITE_API_BASE_URL=http://localhost:8000/api/v1
     depends_on:
       - backend-api
     volumes:
-      # แมปโฟลเดอร์ frontend เพื่อให้เวลาแก้โค้ด React แล้วหน้าเว็บอัปเดตทันที (Hot-Reloading)
       - ../frontend:/app
-      # ป้องกันไม่ให้โฟลเดอร์ node_modules ในเครื่อง Local ทับโฟลเดอร์ใน Container
       - /app/node_modules
 
 volumes:
@@ -323,4 +338,4 @@ volumes:
 networks:
   shared_net:
     external: true
-    name: agentic_network  
+    name: agentic_network

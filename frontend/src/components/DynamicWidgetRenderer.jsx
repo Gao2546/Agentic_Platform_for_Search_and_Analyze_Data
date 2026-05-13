@@ -1,13 +1,21 @@
 import React from 'react';
-import { MarkdownBlock, MetricBlock, TableBlock, ChartBlock, EmbedBlock } from './DynamicBlocks';
+import { 
+  MarkdownBlock, MetricBlock, TableBlock, ChartBlock, EmbedBlock, CustomCodeBlock,
+  AlertBlock, PieChartBlock
+} from './DynamicBlocks';
 
-// Map type ที่ได้รับจาก JSON เข้ากับ React Component
 const BlockMap = {
   markdown: MarkdownBlock,
   metric: MetricBlock,
   table: TableBlock,
   chart: ChartBlock,
-  embed: EmbedBlock
+  line_chart: ChartBlock,
+  bar_chart: ChartBlock,
+  area_chart: ChartBlock,
+  pie_chart: PieChartBlock,
+  embed: EmbedBlock,
+  custom_code: CustomCodeBlock,
+  alert: AlertBlock
 };
 
 // 🚀 ทริคแก้ปัญหา Tailwind Purge: เขียน Mapping Class ไว้ล่วงหน้า

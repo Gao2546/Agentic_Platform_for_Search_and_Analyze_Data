@@ -24,6 +24,10 @@ export const projectAPI = {
     updateTaskDependency: (taskId, depId) => axios.put(`${API_URL}/projects/tasks/${taskId}/dependency`, { depends_on_task_id: depId }),
     updateTask: (taskId, data) => axios.put(`${API_URL}/projects/tasks/${taskId}`, data),
     deleteTask: (taskId) => axios.delete(`${API_URL}/projects/tasks/${taskId}`),
+    previewToolFile: async (toolId) => {
+        return await axios.get(`${API_URL}/projects/tools/${toolId}/preview`);
+    },
+    getToolsDetails: async (toolId) => axios.get(`${API_URL}/projects/tools/${toolId}/details`),
 };
 
 export const dataAPI = {
