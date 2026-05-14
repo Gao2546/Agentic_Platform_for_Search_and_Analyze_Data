@@ -1,15 +1,19 @@
-```code
 .
-├── agentic_core
-│   ├── agentic_core
-│   │   ├── __init__.py
-│   │   ├── udtp_mongo.py
-│   │   └── udtp_postgres.py
-│   └── setup.py
 ├── ai-engine
+│   ├── core
+│   │   └── llm.py
+│   ├── Dockerfile
 │   ├── pre-validator
 │   ├── prompts
-│   └── sanbox
+│   │   ├── ScheduleArchitect.md
+│   │   ├── TaskOrchestrator.md
+│   │   ├── ToolResearcher&DeveloperStep1.md
+│   │   └── ToolResearcher&DeveloperStep2.md
+│   ├── requirements.txt
+│   ├── sanbox
+│   └── src
+│       └── main.py
+├── ai_engin.log
 ├── backend
 │   ├── Dockerfile
 │   ├── go.mod
@@ -17,17 +21,11 @@
 │   └── src
 │       ├── api
 │       │   ├── data_retrieval.py
-│       │   ├── __pycache__
-│       │   │   ├── data_retrieval.cpython-311.pyc
-│       │   │   ├── schedules.cpython-311.pyc
-│       │   │   └── scopes_management.cpython-311.pyc
 │       │   ├── schedules.py
 │       │   └── scopes_management.py
 │       ├── core
 │       ├── db
 │       ├── main.py
-│       ├── __pycache__
-│       │   └── main.cpython-311.pyc
 │       └── services
 ├── data-pipeline
 │   ├── airflow
@@ -48,7 +46,12 @@
 │   ├── package-lock.json
 │   ├── public
 │   │   ├── favicon.svg
-│   │   └── icons.svg
+│   │   ├── icons.svg
+│   │   └── locales
+│   │       ├── en
+│   │       │   └── translation.json
+│   │       └── th
+│   │           └── translation.json
 │   ├── README.md
 │   ├── src
 │   │   ├── App.css
@@ -58,8 +61,14 @@
 │   │   │   ├── react.svg
 │   │   │   └── vite.svg
 │   │   ├── components
+│   │   │   ├── CodeEditorModal.jsx
+│   │   │   ├── DynamicBlocks.jsx
+│   │   │   ├── DynamicBlocks.jsx.back
+│   │   │   ├── DynamicWidgetRenderer.jsx
+│   │   │   └── Skeletons.jsx
 │   │   ├── hooks
 │   │   │   └── useLiveStream.js
+│   │   ├── i18n.jsx
 │   │   ├── index.css
 │   │   ├── main.jsx
 │   │   ├── pages
@@ -71,7 +80,17 @@
 │   │       └── api.js
 │   └── vite.config.js
 ├── images
-│   └── AI_Agentic_Scheduling-2026-04-19-133737.png
+│   ├── AddNewTask1.png
+│   ├── AddSchedule1.png
+│   ├── AI_Agentic_Scheduling-2026-04-19-133737.png
+│   ├── CreateScope1.png
+│   ├── CreateTool1.png
+│   ├── ScheduleManager1.png
+│   ├── SchedulePage1.png
+│   ├── ScopePage1.png
+│   ├── TaskConfiguration1.png
+│   ├── TaskManamger1.png
+│   └── ToolLibrary1.png
 ├── infrastructure
 │   ├── docker-compose.yml
 │   ├── init-scripts
@@ -88,16 +107,24 @@
 │   ├── processors
 │   │   └── fast_lane_worker.py
 │   └── requirements.txt
-├── test
-│   └── test_e2e_flow.py
 ├── tools-library
 │   ├── ai-inference
-│   │   └── llm_sentiment.go
+│   │   ├── llm_sentiment.go
+│   │   └── rule_base_sentiment.py
 │   ├── external-apis
 │   │   ├── fetch_data.py
-│   │   └── fetch_stock_data.py
+│   │   └── WeatherSearchSummary.py
 │   └── traditional-logic
-│       └── clean_and_embed.py
-└── tree.md
+│       ├── clean_and_embed.py
+│       └── generate_dashboard_blocks.py
+├── tree.md
+└── utils
+    ├── setup.py
+    └── utils
+        ├── __init__.py
+        ├── udtp_data_manager.py
+        ├── UDTP_Library_v2_Standard.md
+        ├── udtp_mongo.py
+        └── udtp_postgres.py
 
-42 directories, 58 files
+42 directories, 84 files

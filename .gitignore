@@ -8,7 +8,9 @@
 /config
 /logs
 /.vscode
+/data-pipeline/airflow/config/schedules.json
 .DS_Store
+__pycache__
 *.log
 *.tmp
 *.bak

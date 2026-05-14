@@ -162,6 +162,50 @@
         ]
     },
     {
+        "schedule_id": "240958bb-750d-42aa-bd26-3c376d19e592",
+        "scope_id": "9abebc95-0aee-4ddf-ab64-5ee9aa5e2428",
+        "cron": "0 12 10 * *",
+        "tasks": [
+            {
+                "task_id": "9898a5c5-81ea-40f0-b75d-a99d21bee06b",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/FetchCPIData.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "date",
+                            "value"
+                        ],
+                        "properties": {
+                            "date": {
+                                "type": "string",
+                                "description": "Year-Month format e.g., 2024-01"
+                            },
+                            "value": {
+                                "type": "number",
+                                "description": "CPI index value"
+                            }
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas>=1.5.0",
+                    "requests": "requests>=2.28.0"
+                }
+            }
+        ]
+    },
+    {
         "schedule_id": "271a3c70-00e2-458d-8cfa-6d05f375ee23",
         "scope_id": "b7cc18bd-142b-4601-b924-5d25546d4dfe",
         "cron": null,
@@ -302,6 +346,266 @@
                     }
                 },
                 "dependencies": {}
+            }
+        ]
+    },
+    {
+        "schedule_id": "35266d70-b173-4597-8268-15479a8b718a",
+        "scope_id": "9abebc95-0aee-4ddf-ab64-5ee9aa5e2428",
+        "cron": "0 18 * * 1-5",
+        "tasks": [
+            {
+                "task_id": "58692347-9705-4bc9-aa68-a1097ea5540f",
+                "task_type": "SEARCH",
+                "depends_on_task_id": null,
+                "arguments": {
+                    "source": "yahoo_finance",
+                    "ticker": "^IXIC",
+                    "update_mode": "incremental",
+                    "backfill_years": 10
+                },
+                "script_url": "s3a://ai-tool-scripts/ai-inference/FetchNASDAQPrice.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {}
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "data_preview": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "date": {
+                                        "type": "string"
+                                    },
+                                    "close": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        },
+                        "records_count": {
+                            "type": "integer",
+                            "description": "Number of records saved"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas",
+                    "urllib3": "urllib3>=1.26.0",
+                    "yfinance": "yfinance>=0.2.0"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "370d02da-9d91-40aa-ab96-962c109426f9",
+        "scope_id": "27d43668-0141-43f7-8d9c-357312015d80",
+        "cron": "0 8 * * *",
+        "tasks": [
+            {
+                "task_id": "e3e087c2-e239-4294-af04-a65cb57d268e",
+                "task_type": "ETL",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetch_and_merge_cpi_nasdaq.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "cpi": {
+                                        "type": "number",
+                                        "description": "Raw CPI value"
+                                    },
+                                    "date": {
+                                        "type": "string",
+                                        "description": "Date in string format (YYYY-MM-DD)"
+                                    },
+                                    "nasdaq": {
+                                        "type": "number",
+                                        "description": "Raw NASDAQ closing price"
+                                    },
+                                    "cpi_normalized": {
+                                        "type": "number",
+                                        "description": "CPI normalized to base 100"
+                                    },
+                                    "nasdaq_normalized": {
+                                        "type": "number",
+                                        "description": "NASDAQ normalized to base 100"
+                                    }
+                                }
+                            }
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Status message"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3",
+                    "numpy": "numpy",
+                    "pandas": "pandas",
+                    "pymongo": "pymongo",
+                    "requests": "requests",
+                    "yfinance": "yfinance"
+                }
+            },
+            {
+                "task_id": "a7c15eee-d4be-4f6c-95d2-adee3f6b3278",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "e3e087c2-e239-4294-af04-a65cb57d268e",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/visualize_cpi_vs_nasdaq.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "blocks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "data": {
+                                        "type": "array"
+                                    },
+                                    "type": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "xAxis": {
+                                        "type": "string"
+                                    },
+                                    "yAxis": {
+                                        "type": "array"
+                                    },
+                                    "config": {
+                                        "type": "object"
+                                    },
+                                    "colSpan": {
+                                        "type": "integer"
+                                    }
+                                }
+                            },
+                            "description": "Array of UI blocks stored in MongoDB"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Status message"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3",
+                    "pandas": "pandas",
+                    "pymongo": "pymongo"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "397a1d68-8591-4c8a-a77a-50d9f248c60e",
+        "scope_id": "9abebc95-0aee-4ddf-ab64-5ee9aa5e2428",
+        "cron": "0 0 * * 1",
+        "tasks": [
+            {
+                "task_id": "c152e7ce-ee31-455f-81e6-228af4d104b3",
+                "task_type": "AI_INFERENCE",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/generate_cpi_nasdaq_visualization.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "Completion status"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas",
+                    "pymongo": "pymongo>=4.17.0"
+                }
             }
         ]
     },
@@ -733,6 +1037,100 @@
                     "boto3": "boto3>=1.28.0",
                     "pandas": "pandas",
                     "pymongo": "pymongo==4.17.0"
+                }
+            }
+        ]
+    },
+    {
+        "schedule_id": "625683ac-0403-46f6-a505-596c7173a4e9",
+        "scope_id": "27d43668-0141-43f7-8d9c-357312015d80",
+        "cron": null,
+        "tasks": [
+            {
+                "task_id": "1c95780c-c290-46d8-ad9f-57cfd745b360",
+                "task_type": "ETL",
+                "depends_on_task_id": null,
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/fetch_and_merge_cpi_nasdaq.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "Confirmation message with record count"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas>=2.0.0",
+                    "requests": "requests>=2.31.0",
+                    "yfinance": "yfinance>=0.2.40"
+                }
+            },
+            {
+                "task_id": "357b0d24-775a-40e1-81d0-f8e5bbac80de",
+                "task_type": "VISUALIZE",
+                "depends_on_task_id": "1c95780c-c290-46d8-ad9f-57cfd745b360",
+                "arguments": {},
+                "script_url": "s3a://ai-tool-scripts/ai-inference/visualize_cpi_vs_nasdaq.py",
+                "input_schema": {
+                    "type": "object",
+                    "required": [
+                        "scope_id",
+                        "schedule_id",
+                        "task_id"
+                    ],
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "UUID of the task"
+                        },
+                        "scope_id": {
+                            "type": "string",
+                            "description": "UUID of the scope"
+                        },
+                        "schedule_id": {
+                            "type": "string",
+                            "description": "UUID of the schedule"
+                        }
+                    }
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "Confirmation message with block count"
+                        }
+                    }
+                },
+                "dependencies": {
+                    "boto3": "boto3>=1.28.0",
+                    "pandas": "pandas>=2.0.0",
+                    "pymongo": "pymongo>=4.0.0"
                 }
             }
         ]
