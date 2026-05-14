@@ -8,6 +8,8 @@
 /config
 /logs
 /.vscode
+/test
+/.env
 /data-pipeline/airflow/config/schedules.json
 .DS_Store
 __pycache__
