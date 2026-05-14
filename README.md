@@ -317,14 +317,14 @@ Latest progress summary for the "Agentic Platform for Search Analyze Data":
 
 **Deployment Steps:**
 
-1. **Create the Shared Network:** ```bash
+1. **Create the Shared Network:** 
+```bash
 docker network create agentic_network
-
 ```
 
-2. **Launch Docker Compose:** ```bash
+2. **Launch Docker Compose:** 
+```bash
 docker-compose -f infrastructure/docker-compose.yml up --build
-
 ```
 
 3. **Verify Service Status:** Once the containers are up, you can access the core services at the following local addresses:
