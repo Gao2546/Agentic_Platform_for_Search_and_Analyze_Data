@@ -32,9 +32,9 @@ export default function ScheduleFlow() {
     const [editingTool, setEditingTool] = useState(null);
     const [toolFile, setToolFile] = useState(null);
     const [toolFormData, setToolFormData] = useState({
-        name: '', language: 'Python', author_type: 'HUMAN',
+        name: '', language: 'Python', dependencies: '', author_type: 'HUMAN',
         description: '', description_for_vector_db: '', tags: '',
-        input_schema: '{\n  \n}', output_schema: '{\n  \n}'
+        input_schema: '', output_schema: ''
     });
 
     const [insightsBlocks, setInsightsBlocks] = useState([]);
@@ -182,20 +182,21 @@ export default function ScheduleFlow() {
                         setToolFormData({ 
                             name: tool.name, 
                             language: tool.language, 
+                            dependencies: tool.dependencies ? JSON.stringify(tool.dependencies, null, 2) : '',
                             author_type: tool.author_type,
                             description: tool.description || '',
                             description_for_vector_db: tool.description_for_vector_db || '',
                             tags: tool.tags ? tool.tags.join(', ') : '', // แปลง Array กลับเป็น String ไว้แสดงผล
-                            input_schema: tool.input_schema ? JSON.stringify(tool.input_schema, null, 2) : '{\n  \n}',
-                            output_schema: tool.output_schema ? JSON.stringify(tool.output_schema, null, 2) : '{\n  \n}'
+                            input_schema: tool.input_schema ? JSON.stringify(tool.input_schema, null, 2) : '',
+                            output_schema: tool.output_schema ? JSON.stringify(tool.output_schema, null, 2) : ''
                         });
                     } else {
                         setEditingTool(null);
                         setToolFile(null);
                         setToolFormData({ 
-                            name: '', language: 'Python', author_type: 'HUMAN',
+                            name: '', language: 'Python', dependencies: '', author_type: 'HUMAN',
                             description: '', description_for_vector_db: '', tags: '',
-                            input_schema: '{\n  \n}', output_schema: '{\n  \n}'
+                            input_schema: '', output_schema: ''
                         });
                     }}).catch(err => {
                         alert(`${t('error')}: ไม่สามารถโหลดรายละเอียดเครื่องมือได้ (${err.message})`);
@@ -436,6 +437,13 @@ export default function ScheduleFlow() {
                                         </select>
                                     </div>
                                 </div>
+
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-1">Dependencies (JSON)</label>
+                                    <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" rows="5"
+                                        placeholder='e.g. {&#10;  "pandas": "pandas",&#10;  "boto3": "boto3>=1.28.0",&#10;  "requests": "requests"&#10;}'
+                                        value={toolFormData.dependencies} onChange={e => setToolFormData({...toolFormData, dependencies: e.target.value})} />
+                                </div>
             
                                 <div>
                                     <label className="block text-gray-700 text-sm font-bold mb-1">Description (For UI)</label>
@@ -446,20 +454,30 @@ export default function ScheduleFlow() {
                                 <div>
                                     <label className="block text-gray-700 text-sm font-bold mb-1">Description for Vector DB (AI Context)</label>
                                     <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50" rows="3"
-                                        placeholder="อธิบายการทำงานเชิงลึก เพื่อให้ AI ค้นหาและทำความเข้าใจ Tool ตัวนี้ได้แม่นยำขึ้น..."
+                                        placeholder="Detailed text describing the logic, inputs, and outputs. This will be embedded in the Vector DB to help the AI Agent search and use this tool accurately."
                                         value={toolFormData.description_for_vector_db} onChange={e => setToolFormData({...toolFormData, description_for_vector_db: e.target.value})} />
                                 </div>
             
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-gray-700 text-sm font-bold mb-1">Input Schema (JSON)</label>
-                                        <textarea className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" rows="4"
-                                            value={toolFormData.input_schema} onChange={e => setToolFormData({...toolFormData, input_schema: e.target.value})} />
+                                        <textarea 
+                                            className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                            rows="6"
+                                            placeholder={'{\n  "type": "object",\n  "properties": {\n    "ticker": { "type": "string" }\n  }\n}'}
+                                            value={toolFormData.input_schema} 
+                                            onChange={e => setToolFormData({...toolFormData, input_schema: e.target.value})} 
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-gray-700 text-sm font-bold mb-1">Output Schema (JSON)</label>
-                                        <textarea className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" rows="4"
-                                            value={toolFormData.output_schema} onChange={e => setToolFormData({...toolFormData, output_schema: e.target.value})} />
+                                        <textarea 
+                                            className="w-full border p-2 rounded font-mono text-xs bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                            rows="6"
+                                            placeholder={'{\n  "type": "object",\n  "properties": {\n    "price": { "type": "number" }\n  }\n}'}
+                                            value={toolFormData.output_schema} 
+                                            onChange={e => setToolFormData({...toolFormData, output_schema: e.target.value})} 
+                                        />
                                     </div>
                                 </div>
 

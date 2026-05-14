@@ -485,6 +485,152 @@ async def search_tools(search_params: ToolSearchQuery):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+
+@router.put("/tools/{tool_id}")
+async def update_tool(
+    tool_id: str,
+    name: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
+    dependencies: Optional[str] = Form(None),
+    author_type: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    description_for_vector_db: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    input_schema: Optional[str] = Form(None),
+    output_schema: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    try:
+        update_data = {}
+        if name is not None: update_data["name"] = name
+        if language is not None: update_data["language"] = language
+        if dependencies is not None: update_data["dependencies"] = dependencies
+        if author_type is not None: update_data["author_type"] = author_type
+        if description is not None: update_data["description"] = description
+        if description_for_vector_db is not None: update_data["description_for_vector_db"] = description_for_vector_db
+        if tags is not None: update_data["tags"] = json.loads(tags)
+        if input_schema is not None: update_data["input_schema"] = input_schema
+        if output_schema is not None: update_data["output_schema"] = output_schema
+
+        # 🚀 ถ้าผู้ใช้แนบไฟล์ใหม่มา ให้โหลดไฟล์ขึ้น MinIO ก่อนเซฟลง Database
+        if file:
+            s3 = boto3.client(
+                's3',
+                endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://minio:9000'),
+                aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'admin'),
+                aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'password123'),
+                region_name='us-east-1'
+            )
+            bucket = "ai-tool-scripts"
+            
+            # เช็คโฟลเดอร์จาก author_type ถ้ามีการส่งมา หรือดึงจาก DB
+            current_author_type = update_data.get("author_type", "HUMAN") # fallback value
+            folder = "traditional-logic" if current_author_type == "HUMAN" else "ai-inference"
+            file_path = f"{folder}/{file.filename}"
+            
+            s3.upload_fileobj(file.file, bucket, file_path)
+            update_data["script_url"] = f"s3a://{bucket}/{file_path}" # เพิ่ม URL ใหม่เข้าไปใน Dict ที่จะอัปเดต
+
+        if not update_data:
+            return {"status": "success", "message": "No data to update"}
+
+        # ประกอบคำสั่ง SQL แบบ Dynamic
+        set_clauses = []
+        for i, k in enumerate(update_data.keys()):
+            if k == "tags":
+                set_clauses.append(f"{k} = ${i+2}::text[]") # ใส่ Cast ::text[] ให้ array
+            elif k in ["input_schema", "output_schema"]:
+                set_clauses.append(f"{k} = ${i+2}::jsonb") # ใส่ Cast ::jsonb ให้ schema
+            elif k == "dependencies":
+                set_clauses.append(f"{k} = ${i+2}::jsonb") # ใส่ Cast ::jsonb ให้ dependencies
+            else:
+                set_clauses.append(f"{k} = ${i+2}")
+                
+        set_clause_str = ", ".join(set_clauses)
+        values = list(update_data.values())
+        
+        conn = await asyncpg.connect(POSTGRES_DSN)
+        query = f"UPDATE tools SET {set_clause_str} WHERE id = $1::uuid RETURNING id"
+        updated_id = await conn.fetchval(query, tool_id, *values)
+        await conn.close()
+        
+        if not updated_id:
+            raise HTTPException(status_code=404, detail="Tool not found")
+            
+        return {"status": "success", "message": "Tool updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/tools/{tool_id}")
+async def delete_tool(tool_id: str):
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    query = "DELETE FROM tools WHERE id = $1::uuid RETURNING id"
+    await conn.fetchval(query, tool_id)
+    await conn.close()
+    return {"status": "success"}
+
+
+@router.get("/tools/{tool_id}/preview")
+async def preview_tool_file(tool_id: str):
+    """API สำหรับดึงเนื้อหาไฟล์โค้ดของ Tool ออกมาดูตัวอย่าง"""
+    try:
+        # 1. ดึง script_url จาก Database
+        conn = await asyncpg.connect(POSTGRES_DSN)
+        script_url = await conn.fetchval("SELECT script_url FROM tools WHERE id = $1::uuid", tool_id)
+        await conn.close()
+        
+        if not script_url:
+            raise HTTPException(status_code=404, detail="Tool script not found")
+            
+        # 2. แปลง s3a://bucket/path ให้เป็น bucket และ key
+        # ตัวอย่าง: s3a://ai-tool-scripts/traditional-logic/script.py
+        parsed_url = urllib.parse.urlparse(script_url)
+        bucket = parsed_url.netloc
+        key = parsed_url.path.lstrip('/') # ตัด / ตัวหน้าสุดออก
+        
+        # 3. ดึงไฟล์จาก MinIO
+        s3 = boto3.client(
+            's3',
+            endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://minio:9000'),
+            aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'admin'),
+            aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'password123'),
+            region_name='us-east-1'
+        )
+        
+        response = s3.get_object(Bucket=bucket, Key=key)
+        file_content = response['Body'].read().decode('utf-8')
+        
+        return {"status": "success", "content": file_content}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/tools/{tool_id}/details")
+async def get_tool_details(tool_id: str):
+    """API สำหรับดึงรายละเอียดของ Tool มาแสดงในหน้า Modal แก้ไข"""
+    conn = await asyncpg.connect(POSTGRES_DSN)
+    row = await conn.fetchrow("SELECT id, name, language, dependencies, author_type, description, description_for_vector_db, tags, input_schema, output_schema FROM tools WHERE id = $1::uuid", tool_id)
+    await conn.close()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    
+    return {
+        "status": "success", 
+        "data": {
+            "id": str(row['id']),
+            "name": row['name'],
+            "language": row['language'],
+            "dependencies": json.loads(row['dependencies']) if isinstance(row['dependencies'], str) else (row['dependencies'] or {}),
+            "author_type": row['author_type'],
+            "description": row['description'],
+            "description_for_vector_db": row['description_for_vector_db'],
+            "tags": row['tags'],
+            "input_schema": json.loads(row['input_schema']) if isinstance(row['input_schema'], str) else (row['input_schema'] or {}),
+            "output_schema": json.loads(row['output_schema']) if isinstance(row['output_schema'], str) else (row['output_schema'] or {})
+        }
+    }
+    
 # ==========================================
 # 6. GET API (สำหรับดึงข้อมูลไปทำ Dropdown ใน Frontend)
 # ==========================================
@@ -682,146 +828,6 @@ async def get_schedule_insights(schedule_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@router.put("/tools/{tool_id}")
-async def update_tool(
-    tool_id: str,
-    name: Optional[str] = Form(None),
-    language: Optional[str] = Form(None),
-    author_type: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    description_for_vector_db: Optional[str] = Form(None),
-    tags: Optional[str] = Form(None),
-    input_schema: Optional[str] = Form(None),
-    output_schema: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None) # 👈 ไฟล์เป็น Optional (เผื่อเขาแก้อย่างอื่นแต่ไม่เปลี่ยนไฟล์)
-):
-    try:
-        update_data = {}
-        if name is not None: update_data["name"] = name
-        if language is not None: update_data["language"] = language
-        if author_type is not None: update_data["author_type"] = author_type
-        if description is not None: update_data["description"] = description
-        if description_for_vector_db is not None: update_data["description_for_vector_db"] = description_for_vector_db
-        if tags is not None: update_data["tags"] = json.loads(tags)
-        if input_schema is not None: update_data["input_schema"] = input_schema
-        if output_schema is not None: update_data["output_schema"] = output_schema
-
-        # 🚀 ถ้าผู้ใช้แนบไฟล์ใหม่มา ให้โหลดไฟล์ขึ้น MinIO ก่อนเซฟลง Database
-        if file:
-            s3 = boto3.client(
-                's3',
-                endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://minio:9000'),
-                aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'admin'),
-                aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'password123'),
-                region_name='us-east-1'
-            )
-            bucket = "ai-tool-scripts"
-            
-            # เช็คโฟลเดอร์จาก author_type ถ้ามีการส่งมา หรือดึงจาก DB
-            current_author_type = update_data.get("author_type", "HUMAN") # fallback value
-            folder = "traditional-logic" if current_author_type == "HUMAN" else "ai-inference"
-            file_path = f"{folder}/{file.filename}"
-            
-            s3.upload_fileobj(file.file, bucket, file_path)
-            update_data["script_url"] = f"s3a://{bucket}/{file_path}" # เพิ่ม URL ใหม่เข้าไปใน Dict ที่จะอัปเดต
-
-        if not update_data:
-            return {"status": "success", "message": "No data to update"}
-
-        # ประกอบคำสั่ง SQL แบบ Dynamic
-        set_clauses = []
-        for i, k in enumerate(update_data.keys()):
-            if k == "tags":
-                set_clauses.append(f"{k} = ${i+2}::text[]") # ใส่ Cast ::text[] ให้ array
-            elif k in ["input_schema", "output_schema"]:
-                set_clauses.append(f"{k} = ${i+2}::jsonb") # ใส่ Cast ::jsonb ให้ schema
-            else:
-                set_clauses.append(f"{k} = ${i+2}")
-                
-        set_clause_str = ", ".join(set_clauses)
-        values = list(update_data.values())
-        
-        conn = await asyncpg.connect(POSTGRES_DSN)
-        query = f"UPDATE tools SET {set_clause_str} WHERE id = $1::uuid RETURNING id"
-        updated_id = await conn.fetchval(query, tool_id, *values)
-        await conn.close()
-        
-        if not updated_id:
-            raise HTTPException(status_code=404, detail="Tool not found")
-            
-        return {"status": "success", "message": "Tool updated successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/tools/{tool_id}")
-async def delete_tool(tool_id: str):
-    conn = await asyncpg.connect(POSTGRES_DSN)
-    query = "DELETE FROM tools WHERE id = $1::uuid RETURNING id"
-    await conn.fetchval(query, tool_id)
-    await conn.close()
-    return {"status": "success"}
-
-
-@router.get("/tools/{tool_id}/preview")
-async def preview_tool_file(tool_id: str):
-    """API สำหรับดึงเนื้อหาไฟล์โค้ดของ Tool ออกมาดูตัวอย่าง"""
-    try:
-        # 1. ดึง script_url จาก Database
-        conn = await asyncpg.connect(POSTGRES_DSN)
-        script_url = await conn.fetchval("SELECT script_url FROM tools WHERE id = $1::uuid", tool_id)
-        await conn.close()
-        
-        if not script_url:
-            raise HTTPException(status_code=404, detail="Tool script not found")
-            
-        # 2. แปลง s3a://bucket/path ให้เป็น bucket และ key
-        # ตัวอย่าง: s3a://ai-tool-scripts/traditional-logic/script.py
-        parsed_url = urllib.parse.urlparse(script_url)
-        bucket = parsed_url.netloc
-        key = parsed_url.path.lstrip('/') # ตัด / ตัวหน้าสุดออก
-        
-        # 3. ดึงไฟล์จาก MinIO
-        s3 = boto3.client(
-            's3',
-            endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://minio:9000'),
-            aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'admin'),
-            aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'password123'),
-            region_name='us-east-1'
-        )
-        
-        response = s3.get_object(Bucket=bucket, Key=key)
-        file_content = response['Body'].read().decode('utf-8')
-        
-        return {"status": "success", "content": file_content}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/tools/{tool_id}/details")
-async def get_tool_details(tool_id: str):
-    """API สำหรับดึงรายละเอียดของ Tool มาแสดงในหน้า Modal แก้ไข"""
-    conn = await asyncpg.connect(POSTGRES_DSN)
-    row = await conn.fetchrow("SELECT id, name, language, author_type, description, description_for_vector_db, tags, input_schema, output_schema FROM tools WHERE id = $1::uuid", tool_id)
-    await conn.close()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Tool not found")
-    
-    return {
-        "status": "success", 
-        "data": {
-            "id": str(row['id']),
-            "name": row['name'],
-            "language": row['language'],
-            "author_type": row['author_type'],
-            "description": row['description'],
-            "description_for_vector_db": row['description_for_vector_db'],
-            "tags": row['tags'],
-            "input_schema": json.loads(row['input_schema']) if isinstance(row['input_schema'], str) else (row['input_schema'] or {}),
-            "output_schema": json.loads(row['output_schema']) if isinstance(row['output_schema'], str) else (row['output_schema'] or {})
-        }
-    }
-
 
 # ==========================================
 # Agent Reasoning APIs

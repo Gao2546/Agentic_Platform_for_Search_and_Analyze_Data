@@ -243,7 +243,9 @@ export default function ScopeDetail() {
                     <textarea 
                         className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50" 
                         rows="2" 
-                        placeholder={formData.task_mode === 'AI_AGENT' ? "อธิบายเป้าหมายให้ AI ทราบ (เช่น ดึงข้อมูลราคาหุ้นทุกๆ 5 นาที)" : "อธิบายเป้าหมายของตารางเวลานี้"}
+                        placeholder={formData.task_mode === 'AI_AGENT' 
+                            ? "Detail the goal for the AI Agent (e.g., 'Fetch AAPL stock prices every hour, run sentiment analysis on recent news, and alert if RSI > 70')" 
+                            : "Describe the specific objective of this manual schedule workflow"}
                         value={formData.goal} 
                         onChange={(e) => setFormData({ ...formData, goal: e.target.value })} 
                     />
@@ -296,7 +298,7 @@ export default function ScopeDetail() {
                         </div>
                       ) : (
                         <div>
-                          <input type="text" placeholder="เช่น 0 8 * * *" className="w-full border p-2 rounded text-lg font-mono focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.cron_expression} onChange={(e) => setFormData({ ...formData, cron_expression: e.target.value })} required />
+                          <input type="text" placeholder="e.g., 0 8 * * * (Every day at 08:00 AM)" className="w-full border p-2 rounded text-lg font-mono focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.cron_expression} onChange={(e) => setFormData({ ...formData, cron_expression: e.target.value })} required />
                         </div>
                       )}
                     </div>
