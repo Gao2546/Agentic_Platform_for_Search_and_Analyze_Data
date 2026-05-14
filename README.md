@@ -30,6 +30,27 @@ While initially conceptualized for financial analysis, the platform's modular to
 
 **The ultimate goal of this platform is to act as a unified "brain" where deterministic logic and generative AI work together autonomously to turn raw data into strategic decisions.**
 
+---
+
+## 🤖 Autonomous AI Agent Engine (Now Live!)
+
+The platform now features a fully functional, multi-agent AI engine driven by advanced LLMs (e.g., DeepSeek, Llama 3) via an asynchronous architecture. Users can simply provide a high-level "Goal," and the AI will autonomously design, code, and deploy the entire data pipeline.
+
+### The 3-Step AI Orchestration Lifecycle:
+
+1. **Schedule Architect (Module 1 & 2):**
+   * The user defines a broad Scope Goal. The AI translates this into a strategic execution plan, determining the exact schedules (CRON batch workflows) needed to achieve the objective completely.
+2. **Tool Researcher & Developer (Module 3):**
+   * **RAG Search:** The AI formulates search queries and extracts semantic tags to find existing reusable Tool Scripts in the PostgreSQL `pgvector` database.
+   * **Autonomous Coding:** If no suitable tool exists, the AI seamlessly writes a **new Python or Go script** on the fly (incorporating the standard `UDTPDataManager` for seamless MinIO Data Lake integration), defines its JSON schema, and automatically uploads the file to the system.
+3. **Task Orchestrator (Module 4):**
+   * The AI reviews the approved tools and logically wires them together into a sequential execution graph (A → B → C). It dynamically generates the JSON configuration arguments for each task and binds them to the Apache Airflow DAG.
+
+**Robust Output Parsing:**
+To prevent pipeline failures caused by LLM hallucination, the engine utilizes a custom `parse_ai_json_response` utility with advanced AST (Abstract Syntax Tree) fallbacks to auto-repair malformed JSON syntax automatically.
+
+---
+
 ## Phase 1: Build Data Pipeline & Infrastructure (Flexible & Scalable)
 
 ### 1. Data Lake, Data Warehouse & Storage (Write `docker-compose.yml` )
@@ -174,147 +195,46 @@ While initially conceptualized for financial analysis, the platform's modular to
     
      Collect financial data or information that has already been cleaned (ETL) to prepare for sending to the frontend.
     
-    `{
-      "scope_id": "UUID",
-      "task_id": "UUID",
-      "ticker": "XAU/USD",
-      "timestamp": "ISODate",
-      "data_points": {
-        "open": 2000.5,
-        "close": 2010.2,
-        "rsi": 65.5,
-        "financial_ratios": { "PE": 15.5, "DE": 0.8 } 
-      }
-    }`
-    
     **Collection: `ai_insights`**
     
      Collect prediction results and analyses from AI Inference (Module B)
     
-    `{
-      "scope_id": "UUID",
-      "model_id": "UUID",
-      "insight_type": "SENTIMENT", 
-      "content": "Bullish", 
-      "confidence_score": 0.89,
-      "summary": "This quarter's financial report shows a high growth trend...",
-      "extracted_events": [ { "date": "2026-05-15", "event": "Dividend Payment" } ] 
-    }`
-    
     **Collection: `audit_logs`**
     
      Keep a history of script runs in the AI Sandbox for security.
-    
-    `{
-      "task_id": "UUID",
-      "status": "VALIDATED/FAILED",
-      "sandbox_logs": "Standard Output from Container...",
-      "execution_time_ms": 1500
-    }`
-    
+
 ### 2. Data Orchestration & Compute Engine (Core of the Pipeline)
 
-- Apache Airflow (The Orchestrator / DAG Scheduler)<br>Responsible for managing the entire workflow, setting schedules, and coordinating tasks with other services in sequence.
-
-- Apache Spark (The Compute Engine / Distributed Processing)<br>Awaiting instructions from Airflow to retrieve raw data for rapid distributed ETL/ELT processing.
-
+- Apache Airflow (The Orchestrator / DAG Scheduler)
+- Apache Spark (The Compute Engine / Distributed Processing)
 - Apache Kafka or RabbitMQ (Message Broker & Event Streaming)
-
-  - *Role:* While Airflow handles batch jobs (such as pulling financial statements every quarter), the Streaming system takes over tasks that require extremely low latency, such as monitoring price actions (Price Action) of XAU/USD, BTC/USD, or Forex at minute or second levels.
-  - Tool Script Created by AI for Price Monitoring *: This script* will publish data into the Message Broker when certain conditions are met (e.g., a candlestick reversal or price breaking support level). The system will then trigger the alert model or immediately run Module A without waiting for the Airflow schedule cycle.
-
-- Triggering Mechanism (API Endpoint)<br>The connection between Streaming and Batch Scopes is made through a central API Endpoint of the Backend (e.g., `/api/v1/schedules/trigger/{schedule_id}` ). The Backend will convert this Request into a REST API command to instruct Apache Airflow to initiate a new DAG Run, along with attaching specific Configuration via `argument` variables defined in `the` PostgreSQL `tasks`.
+- Triggering Mechanism (API Endpoint)
   
 ---
 
 ### 3. (A) Workflow Batch Tasks (Controlled by Airflow)
     
-- **Task 3.1: Searching and Collecting Data**<br>
-Airflow executes a Tool Script (such as Python or Go code to pull stock/news API data)<br>
-Import raw data into MinIO.
-
-- **Task 3.2: ETL/ELT Task (Spark Processing)**<br>
-Airflow instructs Spark to start running.
-Spark extracts raw data from MinIO, cleans it, and converts the format.
-Save the cleaned data back to MinIO in **Apache Parquet** or **Delta Lake** format (to achieve maximum performance and preserve the data schema without using Data Connector API conversions) then load necessary data into PostgreSQL/MongoDB
-
-- **Task 3.3: Hybrid Analytics & Prediction Task**<br>  
-In this section, Apache Airflow will check the "Configuration" specified by the user or AI in the Schedule to determine which processing modules are required for this task. These can be divided into two modules.<br>
-  - Module A: Traditional Logic & Calculation (Ordinary Code)<br>Ideal for tasks with fixed formulas or conditions that do not require guesswork. Processes quickly and accurately with 100% precision.
-    - **What works:** Python, Go, or C++ code (existing tool scripts or those synthesized by AI)
-    - **Example of usage:**
-        - **Technical Analysis:** Calculate RSI, MACD, Moving Averages, or identify reversal points from Candlestick Patterns using historical price data.
-        - **Financial Ratios:** Calculate financial ratios from the balance sheet (e.g., P/E, P/BV, D/E Ratio)
-        - **Rule-based Alert:** Scan data for specific conditions, such as "Notify when the price drops by more than 5% within 1 hour."
-    
-    - Module B: AI & Machine Learning Inference<br>Suitable for analyzing data without clear structure or for identifying patterns that are too complex for ordinary code to detect.
-    
-      - **What works:** LLM (e.g., GPT-4, Llama 3), Time-Series Forecasting Models, or Classification Models
-      - **Example of usage:**
-          - **Sentiment Analysis:** Have the LLM read economic news articles or meeting reports and then assess whether the content is "Positive (Bullish)" or "Negative (Bearish)."
-          - **Predictive Modeling:** Forecast the likelihood that the company will announce profit growth in the next quarter.
-          - **Event Extraction:** Extracting Key Information from Financial Reports (e.g., Dividend Payment Dates, Executive Resignations)
-
-- **Task 3.4: Data Visualizations/Summarize**<br>Retrieve data from MongoDB/PostgreSQL to create a summary table, prepared for the frontend to retrieve and display.
+- **Task 3.1: Searching and Collecting Data**
+- **Task 3.2: ETL/ELT Task (Spark Processing)**
+- **Task 3.3: Hybrid Analytics & Prediction Task** - Module A: Traditional Logic & Calculation (Ordinary Code)
+  - Module B: AI & Machine Learning Inference
+- **Task 3.4: Data Visualizations/Summarize**
 
 ---
 
 ### 3. (B) Workflow Streaming Tasks (Event-Driven Pipeline) (Controlled by RabbitMQ or Apache Kafka) (Can not use right now.)
     
 - **Task 3.1: Continuous Data Ingestion (WebSocket & Stream)**
-
-  - **Workflow:** Instead of scheduling tasks to run at specific times, the system creates Streaming Worker Containers that run code (such as Go, Rust, or Python) as long-running processes to maintain persistent connections via WebSocket or gRPC at all times.
-  - **Process:** The script receives real-time price data or news (Tick-by-Tick) immediately upon any market movement, then sends the raw data directly to **a Message Broker (such as RabbitMQ or Apache Kafka)**. Additionally, the raw data may be written to MinIO asynchronously (in the background) for backup purposes.
-
 - **Task 3.2: Real-time Stream Processing (In-memory ETL)**
-
-  - **Work:** Another set of Workers (which may use Apache Spark Structured Streaming or be written in Go/Rust for maximum speed) will Subscribe (track) Topics from the Message Broker.
-  - **Process:** Perform on-the-fly data cleaning (e.g., filtering out error data) and perform rapid aggregation, such as consolidating tick data from each second into one-minute or five-minute candlestick charts (OHLCV). Then, send the cleaned data back to the Message Broker in a new topic for further analysis.
-
-- **Task 3.3: Event-Driven Analytics & Prediction Task** In this section, the Message Broker will distribute data to Workers for further processing according to the user-defined configuration. It will still be divided into 2 Modules but will operate in Real-time:
-
-  - **Module A: Traditional Logic (Fast Lane)**
-      - *Suitable for:* Calculations requiring low latency
-      - *What it does:* Go, Rust, or C++ code (user-uploaded or selected from a library) that captures incoming stream data.
-      - *Example of usage:* As soon as a new candlestick is received, the system immediately calculates the RSI and MACD values. If conditions are met (e.g., RSI breaks above 30 or a reversal pattern occurs), the system will send a rule-based alert to notify the user or trigger an API order execution immediately.
+- **Task 3.3: Event-Driven Analytics & Prediction Task** - **Module A: Traditional Logic (Fast Lane)**
   - **Module B: AI & Machine Learning Inference (Advanced Track)**
-      - *Suitable for:* In-depth analysis triggered by abnormal events in Module A.
-      - *What works:* LLM or a Time-Series Model that has already been deployed and is available as an internal API.
-      - *Example of usage:* If Module A detects that the price of BTC/USD has dropped significantly and unusually (Event Trigger), the system will instruct Module B to immediately retrieve the latest headlines from the News Stream and analyze the sentiment using LLM to determine what negative news has occurred, in order to confirm the trading signal.
-
 - **Task 3.4: Live Broadcasting & State Update**
-
-  - **Process:** Instead of creating a Summary Table and waiting for the Frontend to request it (Pull), the system uses a Message Broker to send the analysis results to the WebSocket Server, which then distributes the data (Push) to the user's Dashboard page. This enables graphs and notifications to update in real-time (Live update).
-  - **Storage:** The latest state data will be "Upserted" (updated and appended if already present) into **MongoDB** to ensure the system always has the most current information available in case a user opens the Web Application page again.
 
 ---
 
 ### 3. (C) Workflow Mix Tasks (Hybrid Event-Triggered Pipeline)
     
-**Concept:** A hybrid (Mix) approach that breaks the limitations of traditional pipelines by allowing each Scope to operate independently and assemble Tasks as needed (not required to complete all 4 Tasks; if there are no final Tasks like Visualize, the system will automatically hide the corresponding UI section).
-
- This system employs a **Cross-Pipeline Triggering** mechanism **via API** to enable streaming speed to work seamlessly with the depth of analysis provided by batch LLM processing.
-
-### Example of Scope Collaboration (Cross-Scope Execution):
-
-**Scope 1: The Background Data Collector (Batch Schedule)**
-* **Function:** Fetches news data at scheduled intervals (e.g., every 1 hour).
-* **Workflow:** Airflow triggers Task 3.1 to fetch news from an API → passes it to Task 3.2 for ETL and cleaning the news text → saves to MinIO and generates Vector Embeddings into the PostgreSQL `knowledge_embeddings` table.
-* **Status:** Runs continuously in independent scheduled batches.
-
-**Scope 2: The Watchdog (Streaming Schedule)**
-* **Function:** Monitors stock or asset prices in real-time.
-* **Workflow:** Task 3.1 opens a WebSocket to receive stock prices continuously → Task 3.3 (Module A) uses Traditional Logic to analyze anomalies (e.g., detecting a volume spike or a price breaking a key support level).
-* **The Trigger:** When an anomaly occurs, the system will not wait for the next Batch cycle. Instead, it immediately sends an HTTP POST Request (API) with an attached Payload (e.g., `{"ticker": "AAPL", "timestamp": "...", "event_type": "BREAKOUT"}`) to trigger the execution of Scope 3 right away.
-
-**Scope 3: The Deep Analyzer (Triggered Batch DAG)**
-* **Function:** Runs only once when invoked, acting as the "brain" for final decision-making.
-* **Workflow Context Payload:** Receives the data payload from Scope 2.
-* **Workflow Skip Logic:** Bypasses Tasks 3.1 and 3.2, starting immediately at Task 3.3 (Module B: AI Inference).
-* **Workflow AI Analysis:** The LLM uses Tools to query the analyzed price data from MongoDB and utilizes RAG to retrieve the latest news from Scope 1. It combines these elements to evaluate the situation (e.g., determining what news caused a price drop) and assesses Sentiment to recommend the next course of action.
-* **Workflow Visualization (Task 3.4):** Sends a comprehensive summary analysis, integrating both charts and text, as an alert to a Dashboard or directly into an application.
-
- **The Triggering Mechanism (API Endpoint)** The connection between Streaming and Batch Scopes is made through a central API Endpoint of the Backend (e.g., `/api/v1/schedules/trigger/{schedule_id}` ). The Backend will convert this Request into a REST API command to instruct Apache Airflow to initiate a new DAG Run, along with attaching specific Configuration via `argument` variables defined in `the` PostgreSQL `tasks`.
+**Concept:** A hybrid (Mix) approach that breaks the limitations of traditional pipelines by allowing each Scope to operate independently and assemble Tasks as needed. This system employs a **Cross-Pipeline Triggering** mechanism **via API** to enable streaming speed to work seamlessly with the depth of analysis provided by batch LLM processing.
 
 ---
 
@@ -323,60 +243,25 @@ In this section, Apache Airflow will check the "Configuration" specified by the 
 **GitHub Actions:** When code is pushed (PySpark, Airflow DAGs), it will automatically build a Docker Image and push it to the Registry.
 
 **1. Pipeline Validate AI Tool Script**
-Pre-validation Pipeline for Code Review Before Entering Sandbox
 **Static Code Analysis & Security Check (Pre-execution)**
-- Before the system builds and runs the AI-generated Tool Script (AI Schedule) in an isolated Docker container, add a static analysis layer to verify the code without running it. This will save resources and prevent crashes.
-    1. **Syntax & AST Check:** Uses modules such as `ast` (for Python) to verify that the code structure is correct and can be compiled successfully.
-    2. **Linter & Malicious Pattern Scanner:** Scans for unauthorized library imports (such as `os.system`, `subprocess` for hacking) or detects infinite loops without a conditional break.
-    3. **Language-Specific Compiler Check:** If the AI synthesizes code in a low-level language (such as Go or Rust), attempt to run the command `go build` or `cargo check` in a limited environment to evaluate the results first. If there are errors from the compiler, send the error log back to the AI for immediate correction (self-correction) without expending resources to run a full container.
    
 **2. Pipeline AI Code Sandbox**
-When AI generates a new Tool Script (AI Schedule), the code will first be run in an isolated Docker container to test its functionality and ensure it does not damage the system. Once validated, the path will be recorded in PostgreSQL, and Airflow will be instructed to use it for actual operations.
-        
-**Resource & Time Limits:** Running AI-generated code in a Docker Container carries risks such as infinite loops or memory leaks. *Recommendations:* Strictly configure `cgroups` in Docker (e.g., limit RAM to 512MB, CPU to 1 core) and set a Timeout (e.g., kill the process immediately if the script runs for more than 60 seconds).
-        
-**Network Restriction:** Code within the Sandbox should not have direct access to the internal Database (Postgres/Mongo). It should only be permitted to access the Internet for pulling external APIs.
-        
-If the test fails, you must submit the error log to the LLM model for code improvement.
+When AI generates a new Tool Script (AI Schedule), the code will first be run in an isolated Docker container to test its functionality and ensure it does not damage the system.
 
 ---
 
 ### 5.  Kubernetes & Cloud Deployment
     
-Use **Minikube** to run K8s locally
-Write  `a .yaml file` to deploy the entire system (Airflow, Spark Workers, DBs, MinIO) to simulate real cloud operation
-        
+Use **Minikube** to run K8s locally.
 
 ### Phase 2: Build AI Agent Application (Frontend & Backend)
 
 - 1. Front End (User Interface & Dashboard)
-    
-    **Dashboard:** Displays news monitoring results, price graphs, financial statement trends, and *AI prediction outcomes*.
-    
-    **Scope & Schedule Manager:** UI for creating scopes, tracking, and setting schedules.
-    
 - 2. Back End (Core Services & API)
-    - User Session and Asset Management System
-    - API for Managing Scope (Add Topic, Add Goal)
-        
-        
-        1.  Create New Scope
-        2.  Add Topic of Scope
-        3.  Add Scope Goal
-        4.  Select Manual Scope or AI Scope
-        5.  If Select Manual Scope Add new Schedule and define specific Goal for the Schedule (Manual Schedule or AI Schedule)
-            
-             If **Manual Schedule**
-            
-            1.  Add Searching and Collect Data
-            2.  Add ETL/ELT Task (Spark Processing)
-            3.  AI Inference & Prediction
-            4.  Data Visualizations/Summarize
         
         **Manual Schedule:** The user selects an existing Tool Script or uploads code (Python/Go) into the system (save to MinIO).
         
-        **AI Schedule (Autonomous Agent):** The user sets a goal (e.g., "Retrieve the financial statements of Company X every quarter"). The AI analyzes the goal and **generates a** new **tool script** or selects an existing one. The script is then sent to *the AI Code Sandbox* for testing. If successful, the tool is automatically added to the system and a batch task is set up in Airflow or a streaming task is initiated.
-        
+        **AI Schedule (Autonomous Agent):** The user sets a goal (e.g., "Retrieve the financial statements of Company X every quarter"). The AI analyzes the goal and **generates a** new **tool script** or selects an existing one.
 
 ### Project Diagrams
 
@@ -391,7 +276,7 @@ Latest progress summary for the "Agentic Platform for Search Analyze Data":
 **Phase 1: Build Data Pipeline & Infrastructure**
 
 1. **Data Lake, Data Warehouse & Storage:**
-   * Successfully installed and connected MinIO to serve as the Data Lake for storing Raw Data and Processed Data (Silver/Gold Layer).
+   * Successfully installed and connected MinIO to serve as the Data Lake for storing Raw Data and Processed Data.
    * Successfully installed and connected PostgreSQL for storing system Metadata and prepared it for High-dimensional Vector storage in the `knowledge_embeddings` table using the `pgvector` extension.
    * Updated the database schema by adding a `ui_position` (JSONB) column to store the X and Y coordinates of the Task Graph and configured `ON DELETE CASCADE` for efficient cascading data deletion.
 
@@ -401,213 +286,52 @@ Latest progress summary for the "Agentic Platform for Search Analyze Data":
 
 3. **(A) Workflow Batch Tasks (End-to-End Pipeline Tested):**
    * **SEARCH Task:** Completed. Tested running a Python script to fetch data, save files to MinIO, and automatically pass the S3 Path to the next task via Airflow XCom.
-   * **ETL/ELT Task:** Completed. Created a Custom Operator (`MinIOSparkSubmitOperator`) to instruct Spark to load required libraries (Hadoop AWS, PostgreSQL Drivers) to fetch raw data from MinIO (`s3a://`), clean it, write the results back in Parquet/Delta Lake format, and log Metadata into PostgreSQL.
-   * **AI_INFERENCE Task:** Completed. Successfully tested running a mock script (.go binary) for AI data analysis, resulting in a perfectly green end-to-end pipeline across all 3 steps.
-
-**AI Engine Module (NEW):**
-   * 🚀 **Core LLM & Prompts:** Built a full-fledged `ai-engine` module driven by `core/llm.py` and prepared a Prompts system (`ScheduleArchitect.md`, `TaskOrchestrator.md`, `ToolResearcher&Developer`) to act as the brain for the Autonomous Agent.
+   * **ETL/ELT Task:** Completed. Created a Custom Operator (`MinIOSparkSubmitOperator`) to instruct Spark to fetch raw data from MinIO (`s3a://`), clean it, write the results back in Parquet/Delta Lake format, and log Metadata into PostgreSQL.
+   * **AI_INFERENCE Task:** Completed. Successfully tested running a mock script (.go binary) for AI data analysis, resulting in a perfectly green end-to-end pipeline.
 
 **Phase 2: Build AI Agent Application (Frontend & Backend)**
 
 1. **Back End (Core Services & API - FastAPI):**
    * Established database connections (`init.sql`) and seeded Dummy Users in PostgreSQL.
-   * 🚀 **(UPDATED) Full CRUD API Router (`scopes_management.py`):** Developed a fully comprehensive API system covering:
-     * `GET`, `POST`, `PUT`, `DELETE` for Scope and Schedule management with Pydantic Model Validation.
-     * `POST` / `GET` for Tools Upload (saves directly to MinIO and logs into the DB immediately).
-     * Special APIs for saving Task Graph coordinates (`ui_position`) and dependencies (`depends_on_task_id`).
-     * Connected Background Tasks to automatically overwrite the `schedules.json` file and trigger HTTP Requests to refresh Airflow instantly upon data modification or deletion.
+   * 🚀 **Full CRUD API Router (`scopes_management.py`):** Developed a fully comprehensive API system covering all RESTful operations and background task triggers.
+   * 🚀 **AI Engine Module (`main.py` & `llm.py`): IMPLEMENTED.** The backend now houses the fully operational AI agent logic. It asynchronously communicates with DeepSeek/LLMs to plan schedules, search vector databases for tools, generate new code, and automatically inject tasks into the DAG.
 
 2. **Front End (User Interface - React + Vite + Tailwind CSS v4):**
    * Successfully created the Frontend project and containerized it in `docker-compose.yml`.
-   * 🚀 **(NEW) Hierarchical UI & Router:** Completely restructured the web interface, transitioning from a single long form to a highly intuitive and clean **Card-based + Pop-up Modal** system, utilizing `react-router-dom` to split pages into `/scopes` and `/scopes/:scopeId`.
-   * 🚀 **(NEW) Interactive Task Builder (Flow Graph):** Integrated the `@xyflow/react` library to create a Pipeline drawing canvas:
-     * Users can click to add tasks, and drag-and-drop to arrange them (coordinates are saved live to the database).
-     * Users can drag arrows to connect dependencies (1 -> 2 -> 3) to visually define the execution order in the Airflow DAG.
-     * Double-click on a box to open an advanced settings Modal (select Tools, input JSON Arguments, change Engine Type) quickly and conveniently.
-   * 🚀 **(NEW) Dynamic Components & Rendering:** Created `DynamicWidgetRenderer.jsx` and `DynamicBlocks.jsx` to flexibly render graphs (Recharts), tables, or Text Markdown based on AI-analyzed data (accomplishing previous Next Steps).
-   * 🚀 **(NEW) Internationalization (i18n):** Added multi-language support (English and Thai) using locale files in the Frontend.
-   * 🚀 **(NEW) Code Editor Modal:** Added a Component for writing/editing Tool Scripts within a Modal window (`CodeEditorModal.jsx`).
-   * **Dashboard:** Developed the UI to support fetching AI Insights summary data from the database and displaying it beautifully as result cards.
+   * 🚀 **Hierarchical UI & Router:** Completely restructured the web interface into a highly intuitive **Card-based + Pop-up Modal** system.
+   * 🚀 **Interactive Task Builder (Flow Graph):** Integrated the `@xyflow/react` library to create an interactive drag-and-drop Pipeline drawing canvas.
+   * 🚀 **Dynamic Components & Rendering:** Created components to flexibly render Generative UI graphs (Recharts), tables, or Text Markdown based on AI-analyzed data.
+   * 🚀 **AI Polling & Skeletons:** Implemented frontend polling to dynamically render loading skeletons while the AI Engine formulates tasks in the background, updating live once generation is complete.
 
 ---
 
 **Next Steps:**
 * Connect the actual Event-Trigger system (Streaming Pipeline) to the Backend.
-* Develop the complete lifecycle of the Autonomous AI Agent within the `ai-engine` to enable it to receive Goals and generate pipelines from start to finish.
+* Enhance the Sandbox validation pipeline for running the AI-generated code securely before saving to MinIO.
 
 ---
 
-### Current Project Tree
-```text
-.
-├── ai-engine
-│   ├── core
-│   │   └── llm.py
-│   ├── Dockerfile
-│   ├── pre-validator
-│   ├── prompts
-│   │   ├── ScheduleArchitect.md
-│   │   ├── TaskOrchestrator.md
-│   │   ├── ToolResearcher&DeveloperStep1.md
-│   │   └── ToolResearcher&DeveloperStep2.md
-│   ├── requirements.txt
-│   ├── sanbox
-│   └── src
-│       └── main.py
-├── ai_engin.log
-├── backend
-│   ├── Dockerfile
-│   ├── go.mod
-│   ├── requirements.txt
-│   └── src
-│       ├── api
-│       │   ├── data_retrieval.py
-│       │   ├── schedules.py
-│       │   └── scopes_management.py
-│       ├── core
-│       ├── db
-│       ├── main.py
-│       └── services
-├── data-pipeline
-│   ├── airflow
-│   │   ├── config
-│   │   │   └── schedules.json
-│   │   ├── dags
-│   │   │   └── agentic_dag_factory.py
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   └── spark-jobs
-│       ├── clean_and_embed_data.py
-│       └── Dockerfile
-├── frontend
-│   ├── Dockerfile
-│   ├── eslint.config.js
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── public
-│   │   ├── favicon.svg
-│   │   ├── icons.svg
-│   │   └── locales
-│   │       ├── en
-│   │       │   └── translation.json
-│   │       └── th
-│   │           └── translation.json
-│   ├── README.md
-│   ├── src
-│   │   ├── App.css
-│   │   ├── App.jsx
-│   │   ├── assets
-│   │   │   ├── hero.png
-│   │   │   ├── react.svg
-│   │   │   └── vite.svg
-│   │   ├── components
-│   │   │   ├── CodeEditorModal.jsx
-│   │   │   ├── DynamicBlocks.jsx
-│   │   │   ├── DynamicBlocks.jsx.back
-│   │   │   ├── DynamicWidgetRenderer.jsx
-│   │   │   └── Skeletons.jsx
-│   │   ├── hooks
-│   │   │   └── useLiveStream.js
-│   │   ├── i18n.jsx
-│   │   ├── index.css
-│   │   ├── main.jsx
-│   │   ├── pages
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── ScheduleFlow.jsx
-│   │   │   ├── ScopeDetail.jsx
-│   │   │   └── ScopeList.jsx
-│   │   └── services
-│   │       └── api.js
-│   └── vite.config.js
-├── images
-│   ├── AddNewTask1.png
-│   ├── AddSchedule1.png
-│   ├── AI_Agentic_Scheduling-2026-04-19-133737.png
-│   ├── CreateScope1.png
-│   ├── CreateTool1.png
-│   ├── ScheduleManager1.png
-│   ├── SchedulePage1.png
-│   ├── ScopePage1.png
-│   ├── TaskConfiguration1.png
-│   ├── TaskManamger1.png
-│   └── ToolLibrary1.png
-├── infrastructure
-│   ├── docker-compose.yml
-│   ├── init-scripts
-│   │   ├── init-minio.sh
-│   │   └── init.sql
-│   └── k8s
-├── README.md
-├── setup-scripts
-├── streaming-pipeline
-│   ├── consumers
-│   ├── Dockerfile
-│   ├── ingestion
-│   │   └── mock_price_stream.py
-│   ├── processors
-│   │   └── fast_lane_worker.py
-│   └── requirements.txt
-├── tools-library
-│   ├── ai-inference
-│   │   ├── llm_sentiment.go
-│   │   └── rule_base_sentiment.py
-│   ├── external-apis
-│   │   ├── fetch_data.py
-│   │   └── WeatherSearchSummary.py
-│   └── traditional-logic
-│       ├── clean_and_embed.py
-│       └── generate_dashboard_blocks.py
-├── tree.md
-└── utils
-    ├── setup.py
-    └── utils
-        ├── __init__.py
-        ├── udtp_data_manager.py
-        ├── UDTP_Library_v2_Standard.md
-        ├── udtp_mongo.py
-        └── udtp_postgres.py
-
-42 directories, 84 files
-
-```
-
 # 🚀 Comprehensive Guide: Agentic Platform for Search & Analyze Data
-
-This manual covers everything from spinning up the infrastructure and developing your tool scripts to navigating the React-based frontend application.
 
 ## 1. Preparation and Deployment (Infrastructure)
 
-The architecture consists of 14 interconnected services managed via Docker Compose. Follow these steps to bring the entire platform online:
-
 **Deployment Steps:**
 
-1. **Create the Shared Network:** The system relies on an external Docker network to allow seamless communication between containers. Run this first:
-```bash
+1. **Create the Shared Network:** ```bash
 docker network create agentic_network
 
 ```
 
-
-2. **Launch Docker Compose:** Build and start the services in detached mode:
-
-
-
-
-Go to root of this project and run this command.
-```bash
+2. **Launch Docker Compose:** ```bash
 docker-compose -f infrastructure/docker-compose.yml up --build
 
 ```
-
 
 3. **Verify Service Status:** Once the containers are up, you can access the core services at the following local addresses:
 * **MinIO (Data Lake):** `http://localhost:9001` (Username: `admin` / Password: `password123`)
 * **Apache Airflow (Orchestrator):** `http://localhost:8080` (Username: `admin` / Password: `admin`)
 * **RabbitMQ (Message Broker):** `http://localhost:15672`
 * **Frontend Web Application:** `http://localhost:5173`
-
-
 
 ---
 
@@ -617,41 +341,6 @@ The system executes custom code (Python, Go, C++) across Distributed Worker Node
 
 **Basic Tool Script Requirements:**
 Every script deployed to the system (whether Traditional Logic or AI Inference) must accept three core arguments to track data lineage via the Uniform Data Tracking Protocol (UDTP): `--scope_id`, `--schedule_id`, and `--task_id`.
-
-**Example Python Script (Using `UDTPDataManager`):**
-
-```python
-import argparse
-from udtp_data_manager import UDTPDataManager
-
-def process_data(scope_id, schedule_id, task_id, custom_arg):
-    # 1. Fetch data from an external API or perform calculations
-    data = {"result": "success", "value": custom_arg}
-    
-    # 2. Save data back to the Data Lake & DB via UDTP
-    manager = UDTPDataManager()
-    manager.save_data(
-        data=data,
-        stage="3_ANALYZE",
-        scope_id=scope_id,
-        schedule_id=schedule_id,
-        task_id=task_id,
-        tags=["analysis", "custom_tool"]
-    )
-    print("Process Completed Successfully")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--scope_id", required=True)
-    parser.add_argument("--schedule_id", required=True)
-    parser.add_argument("--task_id", required=True)
-    # Define any custom arguments your script needs
-    parser.add_argument("--custom_arg", default="default_value")
-    args = parser.parse_args()
-    
-    process_data(args.scope_id, args.schedule_id, args.task_id, args.custom_arg)
-
-```
 
 **Uploading Tools to the System:**
 You can upload scripts directly through the UI in the **Pipeline Builder**. Click the **"+ Upload New Tool"** button, enter a display name, select the language (Python/Go/C++), and attach your file. The backend will automatically upload it to the `ai-tool-scripts` MinIO bucket and register its metadata in PostgreSQL.
@@ -663,53 +352,24 @@ You can upload scripts directly through the UI in the **Pipeline Builder**. Clic
 Navigate to `http://localhost:5173` to access the application. The system is divided into three main operational hierarchies:
 
 ### 3.1 Scope Management (Project Level)
-
 A "Scope" represents a high-level business objective (e.g., "Real-time Gold Price Monitoring & Sentiment Analysis").
-
 * Navigate to the **Scopes** menu.
 * Click **"+ Create New Scope"**.
 * Provide a Name, Description, and Goal.
-* **Select Schedule Mode:** * `MANUAL`: You will manually design the task pipeline.
-* `AI_AGENT`: The AI will autonomously generate scripts and schedule the pipeline for you.
-
-
+* **Select Schedule Mode:** `MANUAL` or `AI_AGENT`.
 
 ### 3.2 Schedule Management (Execution Level)
-
-Inside a Scope, you can create multiple Schedules (e.g., one for daily batch news scraping, another for second-by-second streaming price checks).
-
+Inside a Scope, you can create multiple Schedules.
 * Click **"+ Add Schedule"**.
-* **Select Execution Type:**
-* `CRON`: For batch processing. You can select standard times or write a custom CRON expression (e.g., `0 8 * * *`). The backend will automatically sync this with Airflow.
-* `CONTINUOUS`: For long-running Streaming Workers connected to RabbitMQ/Kafka. (Can not use right now.)
-* `ONCE`: Executes the pipeline a single time.
-
-
-* The Schedule cards on this page will dynamically display the latest AI Insights and execution results.
+* **Select Execution Type:** `CRON`, `CONTINUOUS` (Unavailable right now), or `ONCE`.
 
 ### 3.3 Interactive Pipeline Builder (Task Graph)
-
 This is the core workspace where you visually map out data workflows.
-
 * On a Schedule card, click **"⚙️ Manage Tasks"**.
 * Click **"+ Add New Task"** in the top right. A new node will appear on the canvas.
-* **Drag and Drop:** Position the node wherever you like. The UI automatically saves the X, Y coordinates to the database.
-* **Connect Dependencies:** Drag an arrow from one node's handle to another to define the execution order (e.g., `SEARCH` → `ETL`).
-* **Configure Tasks:** Double-click any node to open the configuration modal:
-* **Task Type:** Classify the operation (`SEARCH`, `ETL`, `TRADITIONAL_LOGIC`, `AI_INFERENCE`, `VISUALIZE`).
-* **Engine Type:** Choose where it runs (`AIRFLOW_DAG` for batch, `STREAMING_WORKER` for real-time).
-* **Tool Script:** Select from your uploaded scripts.
-* **Arguments (JSON):** Pass dynamic configurations to your script (e.g., `{"ticker": "AAPL", "timeframe": "1D"}`).
-
-
+* **Drag and Drop:** Position the node wherever you like.
+* **Connect Dependencies:** Drag an arrow from one node's handle to another to define the execution order.
+* **Configure Tasks:** Double-click any node to open the configuration modal to assign tools and arguments.
 
 ### 3.4 AI Insights Dashboard
-
-When a pipeline completes the `VISUALIZE` stage, the generated JSON blocks are automatically rendered into a visually rich dashboard.
-
-* **Charts & Graphs:** Powered by Recharts (Line, Bar, Area) for historical trends.
-* **Metrics:** Quick-glance numbers with "Bullish/Bearish" trend indicators.
-* **Tables:** Deep-dive data structures.
-* **Markdown:** Fully formatted text summaries and actionable insights generated by your AI models.
-
-The dashboard auto-updates based on the latest pipeline execution, ensuring you always have a real-time pulse on your data.
+When a pipeline completes the `VISUALIZE` stage, the generated JSON blocks are automatically rendered into a visually rich dashboard powered by Recharts.
